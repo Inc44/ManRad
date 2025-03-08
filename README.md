@@ -37,3 +37,9 @@ python -OO Video.py .
 - Neural network classifier for manga pages
 - Scroll manga
 - Zoom bouncing
+
+## Manga Source
+1. Use **Kotatsu** on Android to download the full manga.
+2. Navigate to the Android data folder.
+3. Locate and zip the **CBZ** files.
+4. Copy the `.zip` file to the project directory.
