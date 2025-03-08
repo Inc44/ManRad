@@ -1,0 +1,8 @@
+*.mp4
+*.zip
+cbz/*
+img/*
+json/*
+temp/*
+test/*
+wav/*
