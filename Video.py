@@ -7,72 +7,76 @@ import shutil
 import subprocess
 
 
-def make_dir(p):
-	if not os.path.exists(p):
-		os.makedirs(p)
+def create_directory(directory_path):
+	if not os.path.exists(directory_path):
+		os.makedirs(directory_path)
 
 
-def clear_dir(p):
-	if os.path.exists(p):
-		shutil.rmtree(p)
-	os.makedirs(p)
+def clear_directory(directory_path):
+	if os.path.exists(directory_path):
+		shutil.rmtree(directory_path)
+	os.makedirs(directory_path)
 
 
-def make_silence(p, s, r=24000):
-	samples = int(s * r)
+def create_silence(file_path, duration_seconds, sample_rate=24000):
+	samples = int(duration_seconds * sample_rate)
 	silence = np.zeros(samples, dtype=np.int16)
-	write(p, r, silence)
+	write(file_path, sample_rate, silence)
 
 
-def ffmpeg(args):
-	base = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
-	subprocess.run(base + args, check=True)
+def run_ffmpeg(command_args):
+	base_command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
+	subprocess.run(base_command + command_args, check=True)
 
 
-def make_seq(src, dst, gap=0.5, steps=15):
-	img_dir = os.path.join(src, "img")
-	aud_dir = os.path.join(src, "wav")
-	if not os.path.exists(img_dir):
+def create_media_sequence(
+	source_dir, output_dir, transition_gap=0.5, transition_steps=15
+):
+	image_dir = os.path.join(source_dir, "img")
+	audio_dir = os.path.join(source_dir, "wav")
+	if not os.path.exists(image_dir):
 		return
-	clear_dir(dst)
-	frame_dir = os.path.join(dst, "frames")
+	clear_directory(output_dir)
+	frame_dir = os.path.join(output_dir, "frames")
 	os.makedirs(frame_dir)
-	imgs = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(".jpg")])
-	if not imgs:
+	image_files = sorted(
+		[f for f in os.listdir(image_dir) if f.lower().endswith(".jpg")]
+	)
+	if not image_files:
 		return
-	auds = {}
-	if os.path.exists(aud_dir):
-		for f in os.listdir(aud_dir):
-			if f.lower().endswith(".wav"):
-				base = os.path.splitext(f)[0]
-				auds[base] = os.path.join(aud_dir, f)
-	images = []
-	sounds = []
-	default_rate = 24000
-	rate_found = False
-	for img_f in imgs:
-		img_p = os.path.join(img_dir, img_f)
-		img = cv2.imread(img_p)
-		if img is None:
+	audio_files = {}
+	if os.path.exists(audio_dir):
+		for file in os.listdir(audio_dir):
+			if file.lower().endswith(".wav"):
+				base_name = os.path.splitext(file)[0]
+				audio_files[base_name] = os.path.join(audio_dir, file)
+	processed_images = []
+	processed_audio = []
+	default_sample_rate = 24000
+	sample_rate_determined = False
+	for image_file in image_files:
+		image_path = os.path.join(image_dir, image_file)
+		image = cv2.imread(image_path)
+		if image is None:
 			continue
-		img = cv2.resize(img, (900, 1350))
-		images.append(img)
-		base = os.path.splitext(img_f)[0]
-		if base in auds:
-			aud_p = auds[base]
-			dur = librosa.get_duration(path=aud_p)
-			if not rate_found:
-				_, rate = librosa.load(aud_p, sr=None)
-				rate_found = True
-			if dur < 1.0:
-				extended_path = os.path.join(dst, f"{base}_extended.wav")
-				silence_path = os.path.join(dst, f"{base}_silence.wav")
-				make_silence(silence_path, 1.0 - dur, rate)
-				concat_list = os.path.join(dst, f"{base}_concat.txt")
+		image = cv2.resize(image, (900, 1350))
+		processed_images.append(image)
+		base_name = os.path.splitext(image_file)[0]
+		if base_name in audio_files:
+			audio_path = audio_files[base_name]
+			duration = librosa.get_duration(path=audio_path)
+			if not sample_rate_determined:
+				_, sample_rate = librosa.load(audio_path, sr=None)
+				sample_rate_determined = True
+			if duration < 1.0:
+				extended_path = os.path.join(output_dir, f"{base_name}_extended.wav")
+				silence_path = os.path.join(output_dir, f"{base_name}_silence.wav")
+				create_silence(silence_path, 1.0 - duration, sample_rate)
+				concat_list = os.path.join(output_dir, f"{base_name}_concat.txt")
 				with open(concat_list, "w") as f:
-					f.write(f"file '{os.path.abspath(aud_p)}'\n")
+					f.write(f"file '{os.path.abspath(audio_path)}'\n")
 					f.write(f"file '{os.path.abspath(silence_path)}'\n")
-				ffmpeg(
+				run_ffmpeg(
 					[
 						"-f",
 						"concat",
@@ -85,49 +89,56 @@ def make_seq(src, dst, gap=0.5, steps=15):
 						extended_path,
 					]
 				)
-				sounds.append(extended_path)
+				processed_audio.append(extended_path)
 			else:
-				sounds.append(aud_p)
+				processed_audio.append(audio_path)
 		else:
-			silence_path = os.path.join(dst, f"{base}_silence.wav")
-			make_silence(silence_path, 1.0, default_rate if not rate_found else rate)
-			sounds.append(silence_path)
-	if not images:
+			current_rate = (
+				default_sample_rate if not sample_rate_determined else sample_rate
+			)
+			silence_path = os.path.join(output_dir, f"{base_name}_silence.wav")
+			create_silence(silence_path, 1.0, current_rate)
+			processed_audio.append(silence_path)
+	if not processed_images:
 		return
-	sil_path = os.path.join(dst, "silent.wav")
-	make_silence(sil_path, gap, default_rate if not rate_found else rate)
-	vid_list = []
-	aud_list = []
-	count = 0
-	for i, (img, aud) in enumerate(zip(images, sounds)):
-		dur = librosa.get_duration(path=aud)
-		fname = os.path.join(frame_dir, f"{count:08d}.jpg")
-		cv2.imwrite(fname, img)
-		vid_list.append((fname, gap / steps))
-		vid_list.append((fname, dur - gap / steps))
-		count += 1
-		aud_list.append(aud)
-		if i < len(images) - 1:
-			next_img = images[i + 1]
-			aud_list.append(sil_path)
-			for j in range(1, steps + 1):
-				ratio = j / (steps + 1)
-				blend = cv2.addWeighted(img, 1 - ratio, next_img, ratio, 0)
-				fname = os.path.join(frame_dir, f"{count:08d}.jpg")
-				cv2.imwrite(fname, blend)
-				vid_list.append((fname, gap / steps))
-				count += 1
-	frames_file = os.path.join(dst, "frames.txt")
+	current_rate = default_sample_rate if not sample_rate_determined else sample_rate
+	silence_path = os.path.join(output_dir, "silent.wav")
+	create_silence(silence_path, transition_gap, current_rate)
+	video_sequence = []
+	audio_sequence = []
+	frame_count = 0
+	for i, (image, audio) in enumerate(zip(processed_images, processed_audio)):
+		duration = librosa.get_duration(path=audio)
+		frame_path = os.path.join(frame_dir, f"{frame_count:08d}.jpg")
+		cv2.imwrite(frame_path, image)
+		step_duration = transition_gap / transition_steps
+		video_sequence.append((frame_path, step_duration))
+		video_sequence.append((frame_path, duration - step_duration))
+		frame_count += 1
+		audio_sequence.append(audio)
+		if i < len(processed_images) - 1:
+			next_image = processed_images[i + 1]
+			audio_sequence.append(silence_path)
+			for step in range(1, transition_steps + 1):
+				blend_ratio = step / (transition_steps + 1)
+				blended_image = cv2.addWeighted(
+					image, 1 - blend_ratio, next_image, blend_ratio, 0
+				)
+				frame_path = os.path.join(frame_dir, f"{frame_count:08d}.jpg")
+				cv2.imwrite(frame_path, blended_image)
+				video_sequence.append((frame_path, step_duration))
+				frame_count += 1
+	frames_file = os.path.join(output_dir, "frames.txt")
 	with open(frames_file, "w") as f:
-		for path, dur in vid_list:
+		for path, duration in video_sequence:
 			f.write(f"file '{os.path.abspath(path)}'\n")
-			f.write(f"duration {dur:.8f}\n")
-	audio_file = os.path.join(dst, "audio.txt")
+			f.write(f"duration {duration:.8f}\n")
+	audio_file = os.path.join(output_dir, "audio.txt")
 	with open(audio_file, "w") as a:
-		for path in aud_list:
+		for path in audio_sequence:
 			a.write(f"file '{os.path.abspath(path)}'\n")
-	vid_out = os.path.join(dst, "video.mp4")
-	ffmpeg(
+	video_output = os.path.join(output_dir, "video.mp4")
+	run_ffmpeg(
 		[
 			"-f",
 			"concat",
@@ -142,12 +153,12 @@ def make_seq(src, dst, gap=0.5, steps=15):
 			"-preset",
 			"medium",
 			"-g",
-			0,
-			vid_out,
+			"0",
+			video_output,
 		]
 	)
-	aud_out = os.path.join(dst, "audio.opus")
-	ffmpeg(
+	audio_output = os.path.join(output_dir, "audio.opus")
+	run_ffmpeg(
 		[
 			"-f",
 			"concat",
@@ -161,21 +172,21 @@ def make_seq(src, dst, gap=0.5, steps=15):
 			"96k",
 			"-vbr",
 			"on",
-			aud_out,
+			audio_output,
 		]
 	)
-	final_out = os.path.join(dst, "Man.mp4")
-	ffmpeg(["-i", vid_out, "-i", aud_out, "-c", "copy", final_out])
-	final_path = os.path.join(src, "Man.mp4")
-	shutil.move(final_out, final_path)
-	shutil.rmtree(dst)
+	final_output = os.path.join(output_dir, "Man.mp4")
+	run_ffmpeg(["-i", video_output, "-i", audio_output, "-c", "copy", final_output])
+	final_path = os.path.join(source_dir, "Man.mp4")
+	shutil.move(final_output, final_path)
+	shutil.rmtree(output_dir)
 
 
 if __name__ == "__main__":
 	import sys
 
 	if len(sys.argv) > 1:
-		src = sys.argv[1]
-		tmp = "temp"
-		make_dir(tmp)
-		make_seq(src, tmp)
+		source_directory = sys.argv[1]
+		temp_directory = "temp"
+		create_directory(temp_directory)
+		create_media_sequence(source_directory, temp_directory)
