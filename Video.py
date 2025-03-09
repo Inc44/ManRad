@@ -103,7 +103,8 @@ def make_seq(src, dst, gap=0.5, steps=15):
 		dur = librosa.get_duration(path=aud)
 		fname = os.path.join(frame_dir, f"{count:08d}.jpg")
 		cv2.imwrite(fname, img)
-		vid_list.append((fname, dur))
+		vid_list.append((fname, gap / steps))
+		vid_list.append((fname, dur - gap / steps))
 		count += 1
 		aud_list.append(aud)
 		if i < len(images) - 1:
@@ -134,14 +135,14 @@ def make_seq(src, dst, gap=0.5, steps=15):
 			"0",
 			"-i",
 			frames_file,
-			"-vsync",
+			"-fps_mode",
 			"vfr",
-			"-vf",
-			"format=yuvj420p",
 			"-c:v",
 			"libx264",
-			# "-preset",
-			# "placebo",
+			"-preset",
+			"medium",
+			"-g",
+			0,
 			vid_out,
 		]
 	)
