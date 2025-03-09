@@ -38,7 +38,7 @@ def count_txt_data(base_path):
 		with open(json_path, "r") as f:
 			data = json.load(f)
 		for item in data:
-			if isinstance(item, dict) and "text" in item:
+			if isinstance(item, dict) and "text" in item and item["text"] is not None:
 				texts.append(item["text"])
 	combined_text = " ".join(texts)
 	encoding = tiktoken.get_encoding("cl100k_base")
@@ -63,4 +63,4 @@ if __name__ == "__main__":
 
 	if len(sys.argv) > 1:
 		result = analyze_dir(sys.argv[1])
-		print(json.dumps(result, indent=2))
+		print(json.dumps(result, indent='\t'))

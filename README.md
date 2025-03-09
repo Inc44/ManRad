@@ -22,6 +22,7 @@ git clone https://github.com/Inc44/ManRad.git
 ```
 cd ManRad
 python -OO Prepare.py .zip
+python -OO Delete.py .
 python -OO Evaluate.py .
 python -OO Extract.py .
 python -OO TTS.py .
