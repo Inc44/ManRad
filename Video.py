@@ -32,38 +32,73 @@ def ffmpeg(args):
 def make_seq(src, dst, gap=0.5, steps=15):
 	img_dir = os.path.join(src, "img")
 	aud_dir = os.path.join(src, "wav")
-	if not os.path.exists(img_dir) or not os.path.exists(aud_dir):
+	if not os.path.exists(img_dir):
 		return
 	clear_dir(dst)
 	frame_dir = os.path.join(dst, "frames")
 	os.makedirs(frame_dir)
 	imgs = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(".jpg")])
-	auds = sorted([f for f in os.listdir(aud_dir) if f.lower().endswith(".wav")])
-	pairs = []
-	for img in imgs:
-		base = os.path.splitext(img)[0]
-		aud = base + ".wav"
-		if aud in auds:
-			pairs.append((img, aud))
-	if not pairs:
+	if not imgs:
 		return
+	auds = {}
+	if os.path.exists(aud_dir):
+		for f in os.listdir(aud_dir):
+			if f.lower().endswith(".wav"):
+				base = os.path.splitext(f)[0]
+				auds[base] = os.path.join(aud_dir, f)
 	images = []
 	sounds = []
-	for img_f, aud_f in pairs:
+	default_rate = 24000
+	rate_found = False
+	for img_f in imgs:
 		img_p = os.path.join(img_dir, img_f)
-		aud_p = os.path.join(aud_dir, aud_f)
 		img = cv2.imread(img_p)
 		if img is None:
-			return
+			continue
 		img = cv2.resize(img, (900, 1350))
 		images.append(img)
-		sounds.append(aud_p)
+		base = os.path.splitext(img_f)[0]
+		if base in auds:
+			aud_p = auds[base]
+			dur = librosa.get_duration(path=aud_p)
+			if not rate_found:
+				_, rate = librosa.load(aud_p, sr=None)
+				rate_found = True
+			if dur < 1.0:
+				extended_path = os.path.join(dst, f"{base}_extended.wav")
+				silence_path = os.path.join(dst, f"{base}_silence.wav")
+				make_silence(silence_path, 1.0 - dur, rate)
+				concat_list = os.path.join(dst, f"{base}_concat.txt")
+				with open(concat_list, "w") as f:
+					f.write(f"file '{os.path.abspath(aud_p)}'\n")
+					f.write(f"file '{os.path.abspath(silence_path)}'\n")
+				ffmpeg(
+					[
+						"-f",
+						"concat",
+						"-safe",
+						"0",
+						"-i",
+						concat_list,
+						"-c",
+						"copy",
+						extended_path,
+					]
+				)
+				sounds.append(extended_path)
+			else:
+				sounds.append(aud_p)
+		else:
+			silence_path = os.path.join(dst, f"{base}_silence.wav")
+			make_silence(silence_path, 1.0, default_rate if not rate_found else rate)
+			sounds.append(silence_path)
+	if not images:
+		return
+	sil_path = os.path.join(dst, "silent.wav")
+	make_silence(sil_path, gap, default_rate if not rate_found else rate)
 	vid_list = []
 	aud_list = []
 	count = 0
-	_, rate = librosa.load(sounds[0], sr=None)
-	sil_path = os.path.join(dst, "silent.wav")
-	make_silence(sil_path, gap, rate)
 	for i, (img, aud) in enumerate(zip(images, sounds)):
 		dur = librosa.get_duration(path=aud)
 		fname = os.path.join(frame_dir, f"{count:08d}.jpg")

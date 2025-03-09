@@ -2,7 +2,9 @@
 **/*.jpg
 **/*.json
 **/*.mp4
+**/*.opus
 **/*.png
 **/*.safetensor
+**/*.txt
 **/*.wav
 **/*.zip
