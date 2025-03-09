@@ -9,24 +9,15 @@ def make_audio(text, out_path):
 		with open(out_path, "wb") as f:
 			f.write(b"")
 		return out_path
-	key = os.environ.get("OPENAI_API_KEY")
-	if not key:
-		with open(out_path, "wb") as f:
-			f.write(b"")
-		return out_path
-	headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-	text = text.strip()[:4096]
-	payload = {
-		"model": "tts-1",
-		"input": text,
-		"voice": "ash",
-		"response_format": "wav"
-	}
-	resp = requests.post(
-		"https://api.openai.com/v1/audio/speech", headers=headers, json=payload
-	)
-	with open(out_path, "wb") as f:
-		f.write(resp.content if resp.status_code == 200 else b"")
+	form = {"text": text.strip(), "language_id": "en", "voice_id": "male"}
+	resp = requests.post("https://shorts.multiplewords.com/mwvideos/api/text_to_voice", data=form)
+	if resp.status_code == 200:
+		data = resp.json()
+		if data.get("status") == "success" and data.get("access_url"):
+			audio = requests.get(data["access_url"])
+			if audio.status_code == 200:
+				with open(out_path, "wb") as f:
+					f.write(audio.content)
 	return out_path
 
 
@@ -45,16 +36,16 @@ def process_dir(in_dir):
 	if not os.path.isdir(in_dir):
 		return []
 	json_dir = os.path.join(in_dir, "json")
-	wav_dir = os.path.join(in_dir, "wav")
+	mp3_dir = os.path.join(in_dir, "mp3")
 	if not os.path.isdir(json_dir):
 		return []
-	if not os.path.exists(wav_dir):
-		os.makedirs(wav_dir)
+	if not os.path.exists(mp3_dir):
+		os.makedirs(mp3_dir)
 	files = glob.glob(os.path.join(json_dir, "*.json"))
 	results = []
 	for file in sorted(files):
 		name = os.path.splitext(os.path.basename(file))[0]
-		out_path = os.path.join(wav_dir, f"{name}.wav")
+		out_path = os.path.join(mp3_dir, f"{name}.mp3")
 		text = parse_json(file).replace("\n", " ")
 		make_audio(text, out_path)
 		results.append({"json": file, "audio": out_path})

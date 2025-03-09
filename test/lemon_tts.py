@@ -9,7 +9,7 @@ def make_audio(text, out_path):
 		with open(out_path, "wb") as f:
 			f.write(b"")
 		return out_path
-	key = os.environ.get("OPENAI_API_KEY")
+	key = 'YTrijnmU56BLmbePlXmo7XxldhHOQTkk'
 	if not key:
 		with open(out_path, "wb") as f:
 			f.write(b"")
@@ -23,7 +23,7 @@ def make_audio(text, out_path):
 		"response_format": "wav"
 	}
 	resp = requests.post(
-		"https://api.openai.com/v1/audio/speech", headers=headers, json=payload
+		"https://api.lemonfox.ai/v1/audio/speech", headers=headers, json=payload
 	)
 	with open(out_path, "wb") as f:
 		f.write(resp.content if resp.status_code == 200 else b"")
