@@ -30,6 +30,7 @@ python -OO Video.py .
 ```
 ## TODO
 - All-in-one script
+- Local TTS and LLM
 - Parallel requests
 - Result verification via JSON and WAV min size
 
@@ -37,6 +38,7 @@ python -OO Video.py .
 - Camera movement
 - Neural network classifier for manga pages
 - Scroll manga
+- Translation
 - Zoom bouncing
 
 ## Manga Source
