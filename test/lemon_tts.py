@@ -1,63 +1,79 @@
+import concurrent.futures
 import glob
 import json
 import os
 import requests
+import time
 
 
-def make_audio(text, out_path):
-	if not text or text.strip() == "":
-		with open(out_path, "wb") as f:
-			f.write(b"")
-		return out_path
-	key = 'YTrijnmU56BLmbePlXmo7XxldhHOQTkk'
-	if not key:
-		with open(out_path, "wb") as f:
-			f.write(b"")
-		return out_path
+def make_audio(text, out, retry=10, wait=10.0, min_size=256):
+	key = os.environ.get("LEMON_API_KEY")
 	headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 	text = text.strip()[:4096]
-	payload = {
+	data = {
 		"model": "tts-1",
 		"input": text,
 		"voice": "ash",
-		"response_format": "wav"
+		"response_format": "wav",
 	}
-	resp = requests.post(
-		"https://api.lemonfox.ai/v1/audio/speech", headers=headers, json=payload
-	)
-	with open(out_path, "wb") as f:
-		f.write(resp.content if resp.status_code == 200 else b"")
-	return out_path
+	for _ in range(retry):
+		resp = requests.post(
+			"https://api.lemonfox.ai/v1/audio/speech",
+			headers=headers,
+			json=data,
+			timeout=30,
+		)
+		if resp.status_code == 200:
+			with open(out, "wb") as f:
+				f.write(resp.content)
+			if os.path.getsize(out) >= min_size:
+				return True
+		time.sleep(wait)
+	open(out, "wb").close()
+	return False
 
 
 def parse_json(path):
-	with open(path, "r") as f:
+	with open(path, "r", encoding="utf-8") as f:
 		data = json.load(f)
-	text = ""
 	if isinstance(data, list):
-		text = " ".join(item.get("text", "") for item in data if isinstance(item, dict))
-	elif isinstance(data, dict):
-		text = data.get("text", "")
-	return text.strip()
+		return " ".join(
+			item.get("text", "") for item in data if isinstance(item, dict)
+		).strip()
+	if isinstance(data, dict):
+		return data.get("text", "").strip()
+	return ""
 
 
-def process_dir(in_dir):
-	if not os.path.isdir(in_dir):
+def is_valid(path, min_size=256):
+	return os.path.exists(path) and os.path.getsize(path) >= min_size
+
+
+def process_file(path, out_dir):
+	name = os.path.splitext(os.path.basename(path))[0]
+	out = os.path.join(out_dir, f"{name}.wav")
+	if is_valid(out):
+		return {"file": path, "audio": out, "status": "skipped"}
+	text = parse_json(path).replace("\n", " ")
+	ok = make_audio(text, out)
+	status = "created" if ok else "failed"
+	return {"file": path, "audio": out, "status": status}
+
+
+def process_dir(base, workers=10):
+	if not os.path.isdir(base):
 		return []
-	json_dir = os.path.join(in_dir, "json")
-	wav_dir = os.path.join(in_dir, "wav")
+	json_dir = os.path.join(base, "json")
+	wav_dir = os.path.join(base, "wav")
 	if not os.path.isdir(json_dir):
 		return []
-	if not os.path.exists(wav_dir):
-		os.makedirs(wav_dir)
-	files = glob.glob(os.path.join(json_dir, "*.json"))
+	os.makedirs(wav_dir, exist_ok=True)
+	files = sorted(glob.glob(os.path.join(json_dir, "*.json")))
 	results = []
-	for file in sorted(files):
-		name = os.path.splitext(os.path.basename(file))[0]
-		out_path = os.path.join(wav_dir, f"{name}.wav")
-		text = parse_json(file).replace("\n", " ")
-		make_audio(text, out_path)
-		results.append({"json": file, "audio": out_path})
+	with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+		futures = [pool.submit(process_file, f, wav_dir) for f in files]
+		for future in concurrent.futures.as_completed(futures):
+			results.append(future.result())
 	return results
 
 

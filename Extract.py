@@ -1,13 +1,13 @@
 from pathlib import Path
 import base64
+import concurrent.futures
 import json
 import os
 import requests
 import time
-import concurrent.futures
 
 
-def extract_text(img_path, max_retries=10, retry_delay=10.0):
+def extract_text(img_path, retry=10, wait=10.0):
 	with open(img_path, "rb") as f:
 		b64 = base64.b64encode(f.read()).decode("utf-8")
 	headers = {
@@ -34,7 +34,7 @@ def extract_text(img_path, max_retries=10, retry_delay=10.0):
 		"temperature": 0,
 		"max_tokens": 2000,
 	}
-	for attempt in range(max_retries):
+	for attempt in range(retry):
 		resp = requests.post(
 			"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 			headers=headers,
@@ -42,8 +42,8 @@ def extract_text(img_path, max_retries=10, retry_delay=10.0):
 			timeout=30,
 		)
 		if resp.status_code != 200:
-			if attempt < max_retries - 1:
-				time.sleep(retry_delay)
+			if attempt < retry - 1:
+				time.sleep(wait)
 			continue
 		data = resp.json()
 		if "choices" in data and data["choices"]:
