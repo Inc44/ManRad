@@ -4,6 +4,7 @@
 **/*.mp4
 **/*.opus
 **/*.png
+**/*.pyc
 **/*.safetensor
 **/*.txt
 **/*.wav

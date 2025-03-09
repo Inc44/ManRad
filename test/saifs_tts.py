@@ -3,7 +3,7 @@ import os
 import requests
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from Help import parse_json
+from Help import format
 
 
 def make_audio(text, out_path):
@@ -37,7 +37,7 @@ def process_dir(make_audio, in_dir):
 	for file in sorted(files):
 		name = os.path.splitext(os.path.basename(file))[0]
 		out_path = os.path.join(mp3_dir, f"{name}.mp3")
-		text = parse_json(file).replace("\n", " ")
+		text = format(file)
 		make_audio(text, out_path)
 		results.append({"json": file, "audio": out_path})
 	return results

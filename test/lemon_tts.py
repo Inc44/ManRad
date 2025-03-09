@@ -13,7 +13,7 @@ def make_audio(text, out, retry=10, wait=10.0, min_size=256):
 	data = {
 		"model": "tts-1",
 		"input": text,
-		"voice": "ash",
+		"voice": "onyx",
 		"response_format": "wav",
 	}
 	for _ in range(retry):
