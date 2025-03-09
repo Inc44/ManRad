@@ -1,7 +1,9 @@
 import glob
-import json
 import os
 import requests
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Help import parse_json
 
 
 def make_audio(text, out_path):
@@ -21,18 +23,7 @@ def make_audio(text, out_path):
 	return out_path
 
 
-def parse_json(path):
-	with open(path, "r") as f:
-		data = json.load(f)
-	text = ""
-	if isinstance(data, list):
-		text = " ".join(item.get("text", "") for item in data if isinstance(item, dict))
-	elif isinstance(data, dict):
-		text = data.get("text", "")
-	return text.strip()
-
-
-def process_dir(in_dir):
+def process_dir(make_audio, in_dir):
 	if not os.path.isdir(in_dir):
 		return []
 	json_dir = os.path.join(in_dir, "json")
@@ -56,4 +47,4 @@ if __name__ == "__main__":
 	import sys
 
 	if len(sys.argv) > 1:
-		process_dir(sys.argv[1])
+		process_dir(make_audio, sys.argv[1])

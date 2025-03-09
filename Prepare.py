@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import zipfile
 
 
@@ -52,7 +53,5 @@ def run(zip_path):
 
 
 if __name__ == "__main__":
-	import sys
-
 	if len(sys.argv) > 1:
 		run(sys.argv[1])

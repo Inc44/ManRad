@@ -4,6 +4,7 @@ import concurrent.futures
 import json
 import os
 import requests
+import sys
 import time
 
 
@@ -138,7 +139,5 @@ def main(path, max_workers=10):
 
 
 if __name__ == "__main__":
-	import sys
-
 	if len(sys.argv) > 1:
 		main(sys.argv[1])

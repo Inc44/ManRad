@@ -5,6 +5,7 @@ import numpy as np
 import os
 import shutil
 import subprocess
+import sys
 
 
 def create_directory(directory_path):
@@ -183,8 +184,6 @@ def create_media_sequence(
 
 
 if __name__ == "__main__":
-	import sys
-
 	if len(sys.argv) > 1:
 		source_directory = sys.argv[1]
 		temp_directory = "temp"
