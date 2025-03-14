@@ -1,11 +1,11 @@
 from scipy.io.wavfile import write
-import cv2
 import librosa
 import numpy as np
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 
 def create_directory(directory_path):
@@ -13,187 +13,74 @@ def create_directory(directory_path):
 		os.makedirs(directory_path)
 
 
-def clear_directory(directory_path):
-	if os.path.exists(directory_path):
-		shutil.rmtree(directory_path)
-	os.makedirs(directory_path)
+def run_ffmpeg(args, quiet=True):
+	cmd = ["ffmpeg", "-y"]
+	if quiet:
+		cmd.extend(["-hide_banner", "-loglevel", "error"])
+	cmd.extend(args)
+	subprocess.run(cmd, check=True)
 
 
-def create_silence(file_path, duration_seconds, sample_rate=24000):
-	samples = int(duration_seconds * sample_rate)
+def create_silence(file_path, duration, sample_rate=24000):
+	samples = int(duration * sample_rate)
 	silence = np.zeros(samples, dtype=np.int16)
 	write(file_path, sample_rate, silence)
 
 
-def run_ffmpeg(command_args):
-	base_command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
-	subprocess.run(base_command + command_args, check=True)
-
-
-def preprocess_images(image_files, image_dir, output_width):
-	processed_images = []
-	for image_file in image_files:
-		image_path = os.path.join(image_dir, image_file)
-		image = cv2.imread(image_path)
-		if image is None:
-			continue
-		img_height, img_width = image.shape[:2]
-		scale_factor = output_width / img_width
-		new_height = int(img_height * scale_factor)
-		resized_image = cv2.resize(image, (output_width, new_height))
-		processed_images.append(resized_image)
-	return processed_images
-
-
-def create_media_continuous_scroll(
-	processed_images, audio_durations, output_size, frames_per_second, output_dir
-):
-	output_width, output_height = output_size
-	full_image = np.vstack(processed_images)
-	full_height = full_image.shape[0]
-	heights = [img.shape[0] for img in processed_images]
-	positions = [0]
-	for h in heights[:-1]:
-		positions.append(positions[-1] + h)
-	ease_in_percent = 0.15
-	ease_out_percent = 0.15
-	pause_percent = 0.2
-	unique_frames = {}
-	frame_files = {}
-	video_sequence = []
-	last_y_center = 0
-	for segment_index in range(len(processed_images)):
-		segment_duration = audio_durations[segment_index]
-		start_pos = positions[segment_index]
-		end_pos = (
-			positions[segment_index + 1]
-			if segment_index < len(positions) - 1
-			else full_height - output_height
-		)
-		pause_duration = segment_duration * pause_percent
-		y_center = max(last_y_center, min(start_pos, full_height - output_height // 2))
-		last_y_center = y_center
-		y_start = max(0, y_center - output_height // 2)
-		y_end = min(y_start + output_height, full_height)
-		if y_end - y_start < output_height:
-			y_start = max(0, y_end - output_height)
-		frame_hash = f"{y_start}_{y_end}"
-		if frame_hash not in frame_files:
-			if frame_hash not in unique_frames:
-				unique_frames[frame_hash] = (y_start, y_end)
-			visible = full_image[y_start:y_end, 0:output_width]
-			if visible.shape[0] < output_height:
-				padding_height = output_height - visible.shape[0]
-				visible = cv2.copyMakeBorder(
-					visible,
-					0,
-					padding_height,
-					0,
-					0,
-					cv2.BORDER_CONSTANT,
-					value=[0, 0, 0],
-				)
-			frame_path = os.path.join(output_dir, f"{len(frame_files):08d}.jpg")
-			cv2.imwrite(frame_path, visible)
-			frame_files[frame_hash] = frame_path
-		video_sequence.append((frame_files[frame_hash], pause_duration))
-		scroll_duration = segment_duration * (
-			1 - pause_percent - ease_in_percent - ease_out_percent
-		)
-		if scroll_duration > 0 and segment_index < len(processed_images) - 1:
-			scroll_frames = max(5, int(scroll_duration * frames_per_second / 4))
-			frame_time = scroll_duration / scroll_frames
-			for i in range(1, scroll_frames + 1):
-				scroll_progress = i / scroll_frames
-				if scroll_progress < 0.5:
-					eased_progress = 2 * scroll_progress * scroll_progress
-				else:
-					eased_progress = (
-						1
-						- ((-2 * scroll_progress + 2) * (-2 * scroll_progress + 2)) / 2
-					)
-				y_offset = int(start_pos + eased_progress * (end_pos - start_pos))
-				y_center = max(
-					last_y_center, min(y_offset, full_height - output_height // 2)
-				)
-				last_y_center = y_center
-				y_start = max(0, y_center - output_height // 2)
-				y_end = min(y_start + output_height, full_height)
-				if y_end - y_start < output_height:
-					y_start = max(0, y_end - output_height)
-				frame_hash = f"{y_start}_{y_end}"
-				if frame_hash not in frame_files:
-					if frame_hash not in unique_frames:
-						unique_frames[frame_hash] = (y_start, y_end)
-					visible = full_image[y_start:y_end, 0:output_width]
-					if visible.shape[0] < output_height:
-						padding_height = output_height - visible.shape[0]
-						visible = cv2.copyMakeBorder(
-							visible,
-							0,
-							padding_height,
-							0,
-							0,
-							cv2.BORDER_CONSTANT,
-							value=[0, 0, 0],
-						)
-					frame_path = os.path.join(output_dir, f"{len(frame_files):08d}.jpg")
-					cv2.imwrite(frame_path, visible)
-					frame_files[frame_hash] = frame_path
-				video_sequence.append((frame_files[frame_hash], frame_time))
-		ease_out_duration = segment_duration * ease_out_percent
-		if ease_out_duration > 0 and segment_index < len(processed_images) - 1:
-			video_sequence[-1] = (
-				video_sequence[-1][0],
-				video_sequence[-1][1] + ease_out_duration,
-			)
-	return video_sequence
+def get_audio_duration(audio_path):
+	if os.path.exists(audio_path):
+		return librosa.get_duration(path=audio_path)
+	return 0
 
 
 def create_media_sequence(
 	source_dir,
 	output_dir,
 	transition_gap=0.5,
-	transition_steps=15,
 	use_scrolling=False,
 	output_size=(900, 1350),
 	frames_per_second=30,
 ):
+	width, height = output_size
 	image_dir = os.path.join(source_dir, "img")
 	audio_dir = os.path.join(source_dir, "wav")
 	if not os.path.exists(image_dir):
 		return
-	clear_directory(output_dir)
-	frame_dir = os.path.join(output_dir, "frames")
-	os.makedirs(frame_dir)
+	os.makedirs(output_dir, exist_ok=True)
+	resized_dir = os.path.join(output_dir, "resized")
+	os.makedirs(resized_dir, exist_ok=True)
 	image_files = sorted(
-		[f for f in os.listdir(image_dir) if f.lower().endswith(".jpg")]
+		[f for f in os.listdir(image_dir) if f.lower().endswith((".jpg"))]
 	)
 	if not image_files:
 		return
-	audio_files = {}
-	if os.path.exists(audio_dir):
-		for file in os.listdir(audio_dir):
-			if file.lower().endswith(".wav"):
-				base_name = os.path.splitext(file)[0]
-				audio_files[base_name] = os.path.join(audio_dir, file)
-	processed_audio = []
+	for img_file in image_files:
+		input_path = os.path.join(image_dir, img_file)
+		output_path = os.path.join(resized_dir, img_file)
+		run_ffmpeg(
+			[
+				"-i",
+				input_path,
+				"-vf",
+				f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+				output_path,
+			]
+		)
+	audio_files = []
 	audio_durations = []
-	default_sample_rate = 24000
-	sample_rate_determined = False
-	for image_file in image_files:
-		base_name = os.path.splitext(image_file)[0]
-		if base_name in audio_files:
-			audio_path = audio_files[base_name]
-			duration = librosa.get_duration(path=audio_path)
-			if not sample_rate_determined:
+	sample_rate = 24000
+	for i, img_file in enumerate(image_files):
+		base_name = os.path.splitext(img_file)[0]
+		audio_path = os.path.join(audio_dir, f"{base_name}.wav")
+		if os.path.exists(audio_path):
+			duration = get_audio_duration(audio_path)
+			if i == 0 and duration > 0:
 				_, sample_rate = librosa.load(audio_path, sr=None)
-				sample_rate_determined = True
 			if duration < 1.0:
 				extended_path = os.path.join(output_dir, f"{base_name}_extended.wav")
-				silence_path = os.path.join(output_dir, f"{base_name}_silence.wav")
+				silence_path = os.path.join(output_dir, f"silence_{i}.wav")
 				create_silence(silence_path, 1.0 - duration, sample_rate)
-				concat_list = os.path.join(output_dir, f"{base_name}_concat.txt")
+				concat_list = os.path.join(output_dir, f"concat_{i}.txt")
 				with open(concat_list, "w") as f:
 					f.write(f"file '{os.path.abspath(audio_path)}'\n")
 					f.write(f"file '{os.path.abspath(silence_path)}'\n")
@@ -210,100 +97,153 @@ def create_media_sequence(
 						extended_path,
 					]
 				)
-				processed_audio.append(extended_path)
+				audio_files.append(extended_path)
 				duration = 1.0
 			else:
-				processed_audio.append(audio_path)
-			audio_durations.append(duration)
+				audio_files.append(audio_path)
 		else:
-			current_rate = (
-				default_sample_rate if not sample_rate_determined else sample_rate
-			)
-			silence_path = os.path.join(output_dir, f"{base_name}_silence.wav")
-			create_silence(silence_path, 1.0, current_rate)
-			processed_audio.append(silence_path)
-			audio_durations.append(1.0)
-	if len(processed_audio) == 0:
-		return
-	current_rate = default_sample_rate if not sample_rate_determined else sample_rate
-	video_sequence = []
-	audio_sequence = processed_audio
+			silence_path = os.path.join(output_dir, f"silence_{i}.wav")
+			create_silence(silence_path, 1.0, sample_rate)
+			audio_files.append(silence_path)
+			duration = 1.0
+		audio_durations.append(duration)
+	video_segments = []
+	transition_segments = []
 	if use_scrolling:
-		processed_images = preprocess_images(image_files, image_dir, output_size[0])
-		if not processed_images:
-			return
-		video_sequence = create_media_continuous_scroll(
-			processed_images, audio_durations, output_size, frames_per_second, frame_dir
+		combined_img = os.path.join(output_dir, "combined.jpg")
+		img_paths = [os.path.join(resized_dir, img) for img in image_files]
+		group_size = 5
+		temp_stacked_images = []
+		for i in range(0, len(img_paths), group_size):
+			group = img_paths[i : i + group_size]
+			stacked_output = os.path.join(output_dir, f"stacked_{i}.jpg")
+			temp_stacked_images.append(stacked_output)
+			filter_complex = ""
+			input_args = []
+			for j, img_path in enumerate(group):
+				input_args.extend(["-i", img_path])
+				filter_complex += f"[{j}:v]"
+			filter_complex += f"vstack=inputs={len(group)}[out]"
+			run_ffmpeg(
+				input_args
+				+ ["-filter_complex", filter_complex, "-map", "[out]", stacked_output]
+			)
+		if len(temp_stacked_images) > 1:
+			filter_complex = ""
+			input_args = []
+			for j, img_path in enumerate(temp_stacked_images):
+				input_args.extend(["-i", img_path])
+				filter_complex += f"[{j}:v]"
+			filter_complex += f"vstack=inputs={len(temp_stacked_images)}[out]"
+			run_ffmpeg(
+				input_args
+				+ ["-filter_complex", filter_complex, "-map", "[out]", combined_img]
+			)
+		else:
+			shutil.copy2(temp_stacked_images[0], combined_img)
+		total_duration = sum(audio_durations)
+		scroll_video = os.path.join(output_dir, "scroll.mkv")
+		filter_expr = f"scale={width}:-1,crop={width}:{height}:0:'min(ih-{height},n/(30*{total_duration})*(ih-{height}))'"
+		run_ffmpeg(
+			[
+				"-loop",
+				"1",
+				"-i",
+				combined_img,
+				"-t",
+				str(total_duration),
+				"-filter_complex",
+				filter_expr,
+				"-c:v",
+				"libx264",
+				"-preset",
+				"medium",
+				"-r",
+				str(frames_per_second),
+				scroll_video,
+			]
 		)
+		video_segments.append(scroll_video)
 	else:
-		silence_path = os.path.join(output_dir, "silent.wav")
-		create_silence(silence_path, transition_gap, current_rate)
-		frame_count = 0
-		for i, image_file in enumerate(image_files):
-			image_path = os.path.join(image_dir, image_file)
-			image = cv2.imread(image_path)
-			if image is None:
-				continue
-			duration = audio_durations[i]
-			resized_image = cv2.resize(image, (output_size[0], output_size[1]))
-			frame_path = os.path.join(frame_dir, f"{frame_count:08d}.jpg")
-			cv2.imwrite(frame_path, resized_image)
-			step_duration = transition_gap / transition_steps
-			video_sequence.append((frame_path, step_duration))
-			video_sequence.append((frame_path, duration - step_duration))
+		for i, img_file in enumerate(image_files):
+			still_frame = os.path.join(resized_dir, img_file)
+			still_video = os.path.join(output_dir, f"still_{i}.mkv")
+			concat_txt = os.path.join(output_dir, f"stillframe_{i}.txt")
+			with open(concat_txt, "w") as f:
+				frame_duration = 1.0 / frames_per_second
+				main_duration = audio_durations[i] - frame_duration
+				f.write(f"file '{os.path.abspath(still_frame)}'\n")
+				f.write(f"duration {frame_duration}\n")
+				f.write(f"file '{os.path.abspath(still_frame)}'\n")
+				f.write(f"duration {main_duration}\n")
+				f.write(f"file '{os.path.abspath(still_frame)}'\n")
+			run_ffmpeg(
+				[
+					"-f",
+					"concat",
+					"-safe",
+					"0",
+					"-i",
+					concat_txt,
+					"-c:v",
+					"libx264",
+					"-preset",
+					"medium",
+					still_video,
+				]
+			)
+			video_segments.append(still_video)
 			if i < len(image_files) - 1:
-				audio_sequence.insert(i * 2 + 1, silence_path)
-				next_image_path = os.path.join(image_dir, image_files[i + 1])
-				next_image = cv2.imread(next_image_path)
-				if next_image is not None:
-					next_image_resized = cv2.resize(
-						next_image, (output_size[0], output_size[1])
-					)
-					for step in range(1, transition_steps + 1):
-						blend_ratio = step / (transition_steps + 1)
-						blended_image = cv2.addWeighted(
-							resized_image,
-							1 - blend_ratio,
-							next_image_resized,
-							blend_ratio,
-							0,
-						)
-						frame_path = os.path.join(
-							frame_dir, f"{frame_count + step:08d}.jpg"
-						)
-						cv2.imwrite(frame_path, blended_image)
-						video_sequence.append((frame_path, step_duration))
-				frame_count += transition_steps
-			frame_count += 1
-	frames_file = os.path.join(output_dir, "frames.txt")
-	with open(frames_file, "w") as f:
-		for path, duration in video_sequence:
-			f.write(f"file '{os.path.abspath(path)}'\n")
-			f.write(f"duration {duration:.8f}\n")
-	audio_file = os.path.join(output_dir, "audio.txt")
-	with open(audio_file, "w") as a:
-		for path in audio_sequence:
-			a.write(f"file '{os.path.abspath(path)}'\n")
-	video_output = os.path.join(output_dir, "video.mp4")
+				next_frame = os.path.join(resized_dir, image_files[i + 1])
+				transition_video = os.path.join(output_dir, f"transition_{i}.mkv")
+				run_ffmpeg(
+					[
+						"-loop",
+						"1",
+						"-t",
+						str(transition_gap),
+						"-i",
+						still_frame,
+						"-loop",
+						"1",
+						"-t",
+						str(transition_gap),
+						"-i",
+						next_frame,
+						"-filter_complex",
+						f"[0:v][1:v]xfade=transition=fade:duration={transition_gap}:offset=0",
+						"-c:v",
+						"libx264",
+						"-preset",
+						"medium",
+						"-r",
+						str(frames_per_second),
+						transition_video,
+					]
+				)
+				transition_segments.append(transition_video)
+	concat_file = os.path.join(output_dir, "concat.txt")
+	with open(concat_file, "w") as f:
+		if use_scrolling:
+			for vid in video_segments:
+				f.write(f"file '{os.path.abspath(vid)}'\n")
+		else:
+			for i in range(len(video_segments)):
+				f.write(f"file '{os.path.abspath(video_segments[i])}'\n")
+				if i < len(transition_segments):
+					f.write(f"file '{os.path.abspath(transition_segments[i])}'\n")
+	video_output = os.path.join(output_dir, "video.mkv")
 	run_ffmpeg(
-		[
-			"-f",
-			"concat",
-			"-safe",
-			"0",
-			"-i",
-			frames_file,
-			"-fps_mode",
-			"vfr",
-			"-c:v",
-			"libx264",
-			"-preset",
-			"medium",
-			"-g",
-			"0",
-			video_output,
-		]
+		["-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", video_output]
 	)
+	audio_concat = os.path.join(output_dir, "audio_concat.txt")
+	with open(audio_concat, "w") as f:
+		for i, audio_file in enumerate(audio_files):
+			f.write(f"file '{os.path.abspath(audio_file)}'\n")
+			if not use_scrolling and i < len(audio_files) - 1:
+				silence_path = os.path.join(output_dir, f"transition_silence_{i}.wav")
+				create_silence(silence_path, transition_gap, sample_rate)
+				f.write(f"file '{os.path.abspath(silence_path)}'\n")
 	audio_output = os.path.join(output_dir, "audio.opus")
 	run_ffmpeg(
 		[
@@ -312,7 +252,7 @@ def create_media_sequence(
 			"-safe",
 			"0",
 			"-i",
-			audio_file,
+			audio_concat,
 			"-c:a",
 			"libopus",
 			"-b:a",
@@ -322,14 +262,17 @@ def create_media_sequence(
 			audio_output,
 		]
 	)
-	final_output = os.path.join(output_dir, "Man.mp4")
+	final_output = os.path.join(output_dir, "Man.mkv")
 	run_ffmpeg(["-i", video_output, "-i", audio_output, "-c", "copy", final_output])
-	final_path = os.path.join(source_dir, "Man.mp4")
-	shutil.move(final_output, final_path)
-	shutil.rmtree(output_dir)
+	final_path = os.path.join(source_dir, "Man.mkv")
+	shutil.copy2(final_output, final_path)
 
 
 if __name__ == "__main__":
+	width = 900
+	height = 1350
+	frames_per_second = 30
+	use_scrolling = False
 	if "--width" in sys.argv:
 		width_index = sys.argv.index("--width") + 1
 		if width_index < len(sys.argv):
@@ -342,18 +285,18 @@ if __name__ == "__main__":
 		fps_index = sys.argv.index("--fps") + 1
 		if fps_index < len(sys.argv):
 			frames_per_second = int(sys.argv[fps_index])
+	if "--scroll" in sys.argv:
+		use_scrolling = True
 	if len(sys.argv) > 1:
 		source_directory = sys.argv[1]
-		temp_directory = "temp"
-		create_directory(temp_directory)
-		use_scrolling = "--scroll" in sys.argv
-		width = 900
-		height = 1350
-		frames_per_second = 30
-		create_media_sequence(
-			source_directory,
-			temp_directory,
-			use_scrolling=use_scrolling,
-			output_size=(width, height),
-			frames_per_second=frames_per_second,
-		)
+		temp_directory = tempfile.mkdtemp()
+		try:
+			create_media_sequence(
+				source_directory,
+				temp_directory,
+				use_scrolling=use_scrolling,
+				output_size=(width, height),
+				frames_per_second=frames_per_second,
+			)
+		finally:
+			shutil.rmtree(temp_directory, ignore_errors=True)
