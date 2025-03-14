@@ -60,37 +60,78 @@ def create_media_continuous_scroll(
 	for h in heights[:-1]:
 		positions.append(positions[-1] + h)
 	cum_durations = np.cumsum([0] + audio_durations)
-	video_sequence = []
+	ease_in_percent = 0.15
+	ease_out_percent = 0.15
+	pause_percent = 0.2
+	last_y_center = 0
+	unique_frames = {}
+	frame_positions = []
 	for i in range(total_frames):
 		current_time = i * total_duration / total_frames
 		segment_index = np.searchsorted(cum_durations, current_time, side="right") - 1
-		segment_progress = (
-			current_time - cum_durations[segment_index]
-		) / audio_durations[segment_index]
-		if segment_progress < 0.1:
-			y_offset = positions[segment_index]
-		else:
-			adjusted_progress = (segment_progress - 0.1) / 0.9
-			if segment_index == len(processed_images) - 1:
-				y_offset = positions[segment_index]
+		segment_start_time = cum_durations[segment_index]
+		segment_duration = audio_durations[segment_index]
+		segment_progress = (current_time - segment_start_time) / segment_duration
+		start_pos = positions[segment_index]
+		end_pos = (
+			positions[segment_index + 1]
+			if segment_index < len(positions) - 1
+			else full_height - output_height
+		)
+		if segment_progress < ease_in_percent:
+			progress_ratio = segment_progress / ease_in_percent
+			eased_progress = progress_ratio * progress_ratio * 0.5
+			y_offset = start_pos
+		elif segment_progress < (ease_in_percent + pause_percent):
+			y_offset = start_pos
+		elif segment_progress < (1 - ease_out_percent):
+			scroll_progress = (segment_progress - (ease_in_percent + pause_percent)) / (
+				1 - ease_out_percent - (ease_in_percent + pause_percent)
+			)
+			if scroll_progress < 0.5:
+				eased_progress = 2 * scroll_progress * scroll_progress
 			else:
-				start_pos = positions[segment_index]
-				end_pos = positions[segment_index + 1]
-				y_offset = int(start_pos + adjusted_progress * (end_pos - start_pos))
-		y_center = min(max(0, y_offset), full_height - 1)
+				eased_progress = (
+					1 - ((-2 * scroll_progress + 2) * (-2 * scroll_progress + 2)) / 2
+				)
+			y_offset = int(start_pos + eased_progress * (end_pos - start_pos))
+		else:
+			progress_ratio = (
+				segment_progress - (1 - ease_out_percent)
+			) / ease_out_percent
+			eased_progress = 1 - ((1 - progress_ratio) * (1 - progress_ratio))
+			y_offset = int(start_pos + eased_progress * (end_pos - start_pos))
+		y_center = max(last_y_center, min(y_offset, full_height - output_height // 2))
+		last_y_center = y_center
 		y_start = max(0, y_center - output_height // 2)
 		y_end = min(y_start + output_height, full_height)
 		if y_end - y_start < output_height:
 			y_start = max(0, y_end - output_height)
+		frame_hash = f"{y_start}_{y_end}"
+		frame_positions.append(frame_hash)
+		if frame_hash not in unique_frames:
+			unique_frames[frame_hash] = (y_start, y_end)
+	frame_files = {}
+	for idx, (frame_hash, (y_start, y_end)) in enumerate(unique_frames.items()):
 		visible = full_image[y_start:y_end, 0:output_width]
 		if visible.shape[0] < output_height:
 			padding_height = output_height - visible.shape[0]
 			visible = cv2.copyMakeBorder(
-				visible, 0, padding_height, 0, 0, cv2.BORDER_CONSTANT, value=[0, 0, 0]
+				visible,
+				0,
+				padding_height,
+				0,
+				0,
+				cv2.BORDER_CONSTANT,
+				value=[0, 0, 0],
 			)
-		frame_path = os.path.join(output_dir, f"{i:08d}.jpg")
+		frame_path = os.path.join(output_dir, f"{idx:08d}.jpg")
 		cv2.imwrite(frame_path, visible)
-		frame_duration = total_duration / total_frames
+		frame_files[frame_hash] = frame_path
+	video_sequence = []
+	frame_duration = total_duration / total_frames
+	for frame_hash in frame_positions:
+		frame_path = frame_files[frame_hash]
 		video_sequence.append((frame_path, frame_duration))
 	return video_sequence
 
