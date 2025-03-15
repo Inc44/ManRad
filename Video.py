@@ -121,6 +121,119 @@ def generate_fade_frames(
 	return base_index + num_frames
 
 
+def preprocess_images_for_scroll(image_files, image_dir, output_width):
+	processed_images = []
+	for image_file in image_files:
+		image_path = os.path.join(image_dir, image_file)
+		image = cv2.imread(image_path)
+		if image is None:
+			continue
+		img_height, img_width = image.shape[:2]
+		scale_factor = output_width / img_width
+		new_height = int(img_height * scale_factor)
+		resized_image = cv2.resize(image, (output_width, new_height))
+		processed_images.append(resized_image)
+	return processed_images
+
+
+def create_scroll_frames(
+	processed_images, audio_durations, output_size, frames_per_second, output_dir
+):
+	output_width, output_height = output_size
+	full_image = np.vstack(processed_images)
+	full_height = full_image.shape[0]
+	heights = [img.shape[0] for img in processed_images]
+	positions = [0]
+	for h in heights[:-1]:
+		positions.append(positions[-1] + h)
+	ease_in_percent = 0.15
+	ease_out_percent = 0.15
+	pause_percent = 0.2
+	frame_files = {}
+	video_sequence = []
+	for segment_index in range(len(processed_images)):
+		segment_duration = audio_durations[segment_index]
+		start_pos = positions[segment_index]
+		end_pos = (
+			positions[segment_index + 1]
+			if segment_index < len(positions) - 1
+			else full_height - output_height
+		)
+		pause_duration = segment_duration * pause_percent
+		y_start = max(0, start_pos)
+		y_end = min(y_start + output_height, full_height)
+		if y_end - y_start < output_height:
+			y_start = max(0, y_end - output_height)
+		frame_hash = f"{y_start}_{y_end}"
+		if frame_hash not in frame_files:
+			visible = full_image[y_start:y_end, 0:output_width]
+			if visible.shape[0] < output_height:
+				padding_height = output_height - visible.shape[0]
+				visible = cv2.copyMakeBorder(
+					visible,
+					0,
+					padding_height,
+					0,
+					0,
+					cv2.BORDER_CONSTANT,
+					value=[0, 0, 0],
+				)
+			frame_path = os.path.join(output_dir, f"frame_{len(frame_files):06d}.jpg")
+			cv2.imwrite(frame_path, visible, [cv2.IMWRITE_JPEG_QUALITY, 100])
+			frame_files[frame_hash] = frame_path
+		video_sequence.append(
+			(frame_files[frame_hash], pause_duration)
+		)
+		scroll_duration = segment_duration * (
+			1 - pause_percent - ease_in_percent - ease_out_percent
+		)
+		if scroll_duration > 0 and segment_index < len(processed_images) - 1:
+			scroll_frames = max(
+				5, int(scroll_duration * frames_per_second)
+			)
+			frame_time = scroll_duration / scroll_frames
+			for i in range(1, scroll_frames + 1):
+				scroll_progress = i / scroll_frames
+				if scroll_progress < 0.5:
+					eased_progress = 2 * scroll_progress * scroll_progress
+				else:
+					eased_progress = (
+						1 - (-2 * scroll_progress + 2) * (-2 * scroll_progress + 2) / 2
+					)
+				y_offset = int(start_pos + eased_progress * (end_pos - start_pos))
+				y_start = max(0, y_offset)
+				y_end = min(y_start + output_height, full_height)
+				if y_end - y_start < output_height:
+					y_start = max(0, y_end - output_height)
+				frame_hash = f"{y_start}_{y_end}"
+				if frame_hash not in frame_files:
+					visible = full_image[y_start:y_end, 0:output_width]
+					if visible.shape[0] < output_height:
+						padding_height = output_height - visible.shape[0]
+						visible = cv2.copyMakeBorder(
+							visible,
+							0,
+							padding_height,
+							0,
+							0,
+							cv2.BORDER_CONSTANT,
+							value=[0, 0, 0],
+						)
+					frame_path = os.path.join(
+						output_dir, f"frame_{len(frame_files):06d}.jpg"
+					)
+					cv2.imwrite(frame_path, visible, [cv2.IMWRITE_JPEG_QUALITY, 100])
+					frame_files[frame_hash] = frame_path
+				video_sequence.append((frame_files[frame_hash], frame_time))
+		ease_out_duration = segment_duration * ease_out_percent
+		if ease_out_duration > 0 and segment_index < len(processed_images) - 1:
+			video_sequence[-1] = (
+				video_sequence[-1][0],
+				video_sequence[-1][1] + ease_out_duration,
+			)
+	return video_sequence
+
+
 def create_video_sequence(
 	input_location,
 	output_location,
@@ -216,7 +329,16 @@ def create_video_sequence(
 	create_folder(temp_frame_folder)
 	next_frame_index = 0
 	if use_scroll:
-		pass
+		processed_images = preprocess_images_for_scroll(
+			picture_files, processed_image_folder, frame_width
+		)
+		video_sequence = create_scroll_frames(
+			processed_images,
+			sound_durations,
+			(frame_width, frame_height),
+			frames_per_second,
+			temp_frame_folder,
+		)
 	else:
 		for i, picture_file in enumerate(picture_files):
 			if not image_status.get(picture_file):
@@ -258,17 +380,19 @@ def create_video_sequence(
 	final_video_list = os.path.join(output_location, "concat.txt")
 	frame_duration = 1.0 / frames_per_second
 	with open(final_video_list, "w") as f:
-		frame_files = sorted(
-			[
-				f
-				for f in os.listdir(temp_frame_folder)
-				if f.startswith("frame_") and f.endswith(".jpg")
-			]
-		)
-		frame_index = 0
 		if use_scroll:
-			pass
+			for frame_path, duration in video_sequence:
+				f.write(f"file '{frame_path}'\n")
+				f.write(f"duration {duration:.6f}\n")
 		else:
+			frame_files = sorted(
+				[
+					f
+					for f in os.listdir(temp_frame_folder)
+					if f.startswith("frame_") and f.endswith(".jpg")
+				]
+			)
+			frame_index = 0
 			for i, picture_file in enumerate(picture_files):
 				if not image_status.get(picture_file):
 					continue
@@ -322,7 +446,9 @@ def create_video_sequence(
 	with open(final_audio_list, "w") as f:
 		for i, audio_path in enumerate(sound_files):
 			f.write(f"file '{os.path.abspath(audio_path)}'\n")
-			if not use_scroll and i < len(sound_files) - 1:
+			if (
+				not use_scroll and i < len(sound_files) - 1
+			):
 				silence_duration = fade_time
 				silence_path = os.path.join(
 					temp_sound_folder, "silence", f"transition_silence_{i}.wav"
@@ -395,4 +521,4 @@ if __name__ == "__main__":
 			frame_height=frame_height_default,
 			frames_per_second=frames_per_second_default,
 		)
-		#shutil.rmtree(temp_folder_path, ignore_errors=True)
+		# shutil.rmtree(temp_folder_path, ignore_errors=True)
