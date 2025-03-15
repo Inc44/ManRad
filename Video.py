@@ -121,29 +121,6 @@ def generate_fade_frames(
 	return base_index + num_frames
 
 
-def generate_scroll_frames(
-	full_image_path, output_folder, total_frames, frame_width, frame_height, base_index
-):
-	full_image = cv2.imread(full_image_path)
-	if full_image is None:
-		return base_index
-	img_height = full_image.shape[0]
-	if img_height <= frame_height:
-		return base_index
-	for i in range(total_frames):
-		y_offset = int(i / total_frames * (img_height - frame_height))
-		y_offset = min(y_offset, img_height - frame_height)
-		cropped_img = full_image[y_offset : y_offset + frame_height, :frame_width]
-		if cropped_img.shape[0] < frame_height:
-			pad_amount = frame_height - cropped_img.shape[0]
-			cropped_img = cv2.copyMakeBorder(
-				cropped_img, 0, pad_amount, 0, 0, cv2.BORDER_CONSTANT, value=(0, 0, 0)
-			)
-		frame_name = f"frame_{base_index + i:06d}.jpg"
-		cv2.imwrite(os.path.join(output_folder, frame_name), cropped_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
-	return base_index + total_frames
-
-
 def create_video_sequence(
 	input_location,
 	output_location,
@@ -239,58 +216,7 @@ def create_video_sequence(
 	create_folder(temp_frame_folder)
 	next_frame_index = 0
 	if use_scroll:
-		full_image_path = os.path.join(output_location, "combined.jpg")
-		image_locations = [
-			os.path.join(processed_image_folder, img)
-			for img in picture_files
-			if image_status.get(img, False)
-		]
-		if not image_locations:
-			return
-		image_group_size = 5
-		with concurrent.futures.ThreadPoolExecutor() as executor:
-			tasks = [
-				executor.submit(
-					combine_images_vertically,
-					image_locations[i : i + image_group_size],
-					output_location,
-					i,
-					frame_width,
-					frame_height,
-				)
-				for i in range(0, len(image_locations), image_group_size)
-			]
-			temp_stacked = [
-				task.result()
-				for task in concurrent.futures.as_completed(tasks)
-				if task.result()
-			]
-		if len(temp_stacked) > 1:
-			final_image = None
-			for img_path in temp_stacked:
-				img = cv2.imread(img_path)
-				if img is not None:
-					final_image = (
-						img if final_image is None else cv2.vconcat([final_image, img])
-					)
-			if final_image is not None:
-				cv2.imwrite(full_image_path, final_image, [cv2.IMWRITE_JPEG_QUALITY, 100])
-		elif temp_stacked:
-			shutil.copy2(temp_stacked[0], full_image_path)
-		total_duration = sum(sound_durations)
-		total_frames = int(np.ceil(total_duration * frames_per_second))
-		next_frame_index = (
-			generate_scroll_frames(
-				full_image_path,
-				temp_frame_folder,
-				total_frames,
-				frame_width,
-				frame_height,
-				next_frame_index,
-			)
-			if os.path.exists(full_image_path)
-			else 0
-		)
+		pass
 	else:
 		for i, picture_file in enumerate(picture_files):
 			if not image_status.get(picture_file):
@@ -341,12 +267,7 @@ def create_video_sequence(
 		)
 		frame_index = 0
 		if use_scroll:
-			for i in range(len(frame_files)):
-				frame_path = os.path.abspath(
-					os.path.join(temp_frame_folder, f"frame_{i:06d}.jpg")
-				)
-				f.write(f"file '{frame_path}'\n")
-				f.write(f"duration {frame_duration}\n")
+			pass
 		else:
 			for i, picture_file in enumerate(picture_files):
 				if not image_status.get(picture_file):
