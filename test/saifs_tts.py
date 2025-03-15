@@ -2,6 +2,7 @@ import glob
 import os
 import requests
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from Help import format
 
@@ -12,7 +13,9 @@ def make_audio(text, out_path):
 			f.write(b"")
 		return out_path
 	form = {"text": text.strip(), "language_id": "en", "voice_id": "male"}
-	resp = requests.post("https://shorts.multiplewords.com/mwvideos/api/text_to_voice", data=form)
+	resp = requests.post(
+		"https://shorts.multiplewords.com/mwvideos/api/text_to_voice", data=form
+	)
 	if resp.status_code == 200:
 		data = resp.json()
 		if data.get("status") == "success" and data.get("access_url"):

@@ -181,16 +181,12 @@ def create_scroll_frames(
 			frame_path = os.path.join(output_dir, f"frame_{len(frame_files):06d}.jpg")
 			cv2.imwrite(frame_path, visible, [cv2.IMWRITE_JPEG_QUALITY, 100])
 			frame_files[frame_hash] = frame_path
-		video_sequence.append(
-			(frame_files[frame_hash], pause_duration)
-		)
+		video_sequence.append((frame_files[frame_hash], pause_duration))
 		scroll_duration = segment_duration * (
 			1 - pause_percent - ease_in_percent - ease_out_percent
 		)
 		if scroll_duration > 0 and segment_index < len(processed_images) - 1:
-			scroll_frames = max(
-				5, int(scroll_duration * frames_per_second)
-			)
+			scroll_frames = max(5, int(scroll_duration * frames_per_second))
 			frame_time = scroll_duration / scroll_frames
 			for i in range(1, scroll_frames + 1):
 				scroll_progress = i / scroll_frames
@@ -446,9 +442,7 @@ def create_video_sequence(
 	with open(final_audio_list, "w") as f:
 		for i, audio_path in enumerate(sound_files):
 			f.write(f"file '{os.path.abspath(audio_path)}'\n")
-			if (
-				not use_scroll and i < len(sound_files) - 1
-			):
+			if not use_scroll and i < len(sound_files) - 1:
 				silence_duration = fade_time
 				silence_path = os.path.join(
 					temp_sound_folder, "silence", f"transition_silence_{i}.wav"
