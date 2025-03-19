@@ -1,10 +1,10 @@
-import os
+from glob import glob
 import json
 import librosa
-import soundfile as sf
 import numpy as np
+import os
+import soundfile as sf
 import subprocess
-from glob import glob
 
 
 def create_silence(duration=1.0, sr=24000):
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 	img_directory = "img"
 	wav_directory = "wav"
 	output_directory = "output"
-	use_transition = True
+	use_transition = False
 	target_duration = 1.0
 	process_and_merge_audio(
 		img_directory, wav_directory, output_directory, target_duration, use_transition
