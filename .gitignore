@@ -1,6 +1,8 @@
 **/*.cbz
+**/*.flac
 **/*.jpg
 **/*.json
+**/*.mkv
 **/*.mp4
 **/*.opus
 **/*.png
