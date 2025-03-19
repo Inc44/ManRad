@@ -62,4 +62,4 @@ for filename in os.listdir(image_directory):
 		output_file_path = os.path.join(output_directory, root + output_extension)
 		os.makedirs(output_directory, exist_ok=True)
 		with open(output_file_path, "w") as json_file:
-			json.dump(y_deltas, json_file)
+			json.dump(y_deltas, json_file, indent="\t")
