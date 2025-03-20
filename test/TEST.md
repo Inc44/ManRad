@@ -17,3 +17,8 @@ echo %LEMON_API_KEY%
 ```
 docker run --gpus all -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-gpu:v0.2.2
 ```
+
+```
+setx /M MELO_API_KEY ""
+echo %MELO_API_KEY%
+```
