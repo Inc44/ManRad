@@ -36,3 +36,12 @@ pip install git+https://github.com/myshell-ai/MeloTTS.git
 python -m unidic download
 pip install -U torch --index-url https://download.pytorch.org/whl/cu126
 ```
+
+```
+pip install mistralai
+```
+
+```
+setx /M MISTRAL_API_KEY ""
+echo %MISTRAL_API_KEY%
+```
