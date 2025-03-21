@@ -11,3 +11,5 @@
 **/*.txt
 **/*.wav
 **/*.zip
+checkpoints*/**
+openvoice/**

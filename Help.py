@@ -2,7 +2,6 @@ import concurrent.futures
 import glob
 import json
 import os
-import re
 
 
 def parse_json(path):
