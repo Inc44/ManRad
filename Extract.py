@@ -40,7 +40,6 @@ def extract_text(img_path, retry=10, wait=10.0):
 			"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 			headers=headers,
 			json=payload,
-			timeout=30,
 		)
 		if resp.status_code != 200:
 			if attempt < retry - 1:
@@ -86,7 +85,7 @@ def process_image(img_path, img_dir, json_dir):
 			if text_data and "box_2d" in text_data[0]:
 				text_data.sort(key=lambda x: (x["box_2d"][0], -x["box_2d"][1]))
 			with open(json_path, "w", encoding="utf-8") as f:
-				json.dump(text_data, f, indent="\t")
+				json.dump(text_data, f, indent="\t", ensure_ascii=False)
 			if verify_json_file(str(json_path)):
 				return {"image": str(img_path), "json": str(json_path)}
 	return {
@@ -134,6 +133,7 @@ def main(path, max_workers=10):
 			},
 			f,
 			indent="\t",
+			ensure_ascii=False,
 		)
 	return results
 

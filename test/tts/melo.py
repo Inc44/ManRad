@@ -20,7 +20,6 @@ def make_audio(text, out, retry=10, wait=10.0, min_size=256):
 			"https://api.hyperbolic.xyz/v1/audio/generation",
 			headers=headers,
 			json=data,
-			timeout=30,
 		)
 		if resp.status_code == 200:
 			with open(out, "wb") as f:

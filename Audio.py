@@ -26,9 +26,20 @@ def process_audio_file(jpg_path, wav_dir, target_duration=1.0):
 	wav_path = os.path.join(wav_dir, f"{base_name}.wav")
 	sr = 24000
 	if os.path.exists(wav_path):
-		audio, sr = librosa.load(wav_path, sr=None)
-		duration = len(audio) / sr
+		cmd = [
+			"ffprobe",
+			"-i",
+			wav_path,
+			"-show_entries",
+			"format=duration",
+			"-v",
+			"quiet",
+			"-of",
+			"csv=p=0",
+		]
+		duration = float(subprocess.check_output(cmd).decode().strip())
 		if duration < target_duration:
+			audio, sr = librosa.load(wav_path, sr=None)
 			extended_audio = extend_audio_with_silence(audio, sr, target_duration)
 			sf.write(wav_path, extended_audio, sr)
 			duration = target_duration
@@ -76,7 +87,7 @@ def create_audio_list_file(wav_dir, jpg_basenames, output_dir, use_transition=Fa
 
 
 def merge_audio_files(audio_list_file, output_dir):
-	final_audio_file = os.path.join(output_dir, "merged_audio.opus")
+	final_audio_file = os.path.join(output_dir, "audio.opus")
 	cmd = [
 		"ffmpeg",
 		"-y",
@@ -105,7 +116,7 @@ def save_audio_durations(jpg_basenames, audio_durations, output_dir):
 	json_path = os.path.join(output_dir, "audio_durations.json")
 	durations_list = [audio_durations[base_name] for base_name in jpg_basenames]
 	with open(json_path, "w") as f:
-		json.dump(durations_list, f, indent="\t")
+		json.dump(durations_list, f, indent="\t", ensure_ascii=False)
 	return json_path
 
 

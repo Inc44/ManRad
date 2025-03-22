@@ -62,4 +62,4 @@ def analyze_dir(dir_path):
 if __name__ == "__main__":
 	if len(sys.argv) > 1:
 		result = analyze_dir(sys.argv[1])
-		print(json.dumps(result, indent="\t"))
+		print(json.dumps(result, indent="\t", ensure_ascii=False))

@@ -210,5 +210,5 @@ if __name__ == "__main__":
 		delta_directory,
 		output_directory,
 		output_filename,
-		intro_duration=0.0,
+		intro_duration=3.0,
 	)

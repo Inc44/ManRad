@@ -33,7 +33,7 @@ def calculate_y_deltas(centers, image_height):
 	return deltas
 
 
-def merge_small_deltas(deltas, threshold=50):
+def merge_small_deltas(deltas, threshold=100):
 	if not deltas:
 		return []
 	merged_deltas = []
@@ -78,7 +78,7 @@ for filename in os.listdir(image_directory):
 		os.makedirs(output_directory, exist_ok=True)
 		output_file_path = os.path.join(output_directory, root + ".json")
 		with open(output_file_path, "w") as json_file:
-			json.dump(merged_deltas, json_file, indent="\t")
+			json.dump(merged_deltas, json_file, indent="\t", ensure_ascii=False)
 		"""
 		image = Image.open(image_path).convert("RGB")
 		annotated_image = draw_ocr(image, ocr_result)

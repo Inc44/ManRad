@@ -278,7 +278,7 @@ class MangaModel:
 			"cm": {"tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn)},
 		}
 		with open(os.path.join(self.dir, "results.json"), "w") as f:
-			json.dump(results, f, indent="\t")
+			json.dump(results, f, indent="\t", ensure_ascii=False)
 		cm = [[tn, fp], [fn, tp]]
 		plt.figure(figsize=(8, 6))
 		plt.imshow(cm, cmap="Blues")
@@ -350,7 +350,7 @@ class MangaModel:
 		results["miss_count"] = len(misses)
 		results["auc"] = float(auc)
 		with open(os.path.join(self.dir, "results.json"), "w") as f:
-			json.dump(results, f, indent="\t")
+			json.dump(results, f, indent="\t", ensure_ascii=False)
 		return results
 
 	def export(self, path=None):

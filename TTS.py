@@ -21,7 +21,6 @@ def make_audio(text, out, retry=10, wait=10.0, min_size=256):
 			"https://api.openai.com/v1/audio/speech",
 			headers=headers,
 			json=data,
-			timeout=30,
 		)
 		if resp.status_code == 200:
 			with open(out, "wb") as f:
