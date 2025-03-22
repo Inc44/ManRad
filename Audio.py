@@ -92,6 +92,8 @@ def merge_audio_files(audio_list_file, output_dir):
 		"ffmpeg",
 		"-y",
 		"-hide_banner",
+		"-loglevel",
+		"error",
 		"-f",
 		"concat",
 		"-safe",

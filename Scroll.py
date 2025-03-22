@@ -61,6 +61,8 @@ def setup_ffmpeg_process(output_file, width, height, fps):
 		"ffmpeg",
 		"-y",
 		"-hide_banner",
+		"-loglevel",
+		"error",
 		"-f",
 		"rawvideo",
 		"-c:v",

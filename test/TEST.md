@@ -49,3 +49,16 @@ echo %MISTRAL_API_KEY%
 ```
 pip install edge-tts
 ```
+
+```
+conda activate ManRad
+python -OO Audio.py
+conda activate paddle
+python -OO Delta.py
+conda activate ManRad
+python -OO Scroll.py
+ffmpeg -i output/scroll.mkv -i output/audio.wav -c copy output/result.mkv
+ffprobe -i output/audio.opus
+ffprobe -i output/scroll.mkv
+ffprobe -i output/result.mkv
+```
