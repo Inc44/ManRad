@@ -45,3 +45,7 @@ pip install mistralai
 setx /M MISTRAL_API_KEY ""
 echo %MISTRAL_API_KEY%
 ```
+
+```
+pip install edge-tts
+```
