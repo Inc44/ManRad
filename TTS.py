@@ -10,10 +10,11 @@ def make_audio(text, out, retry=10, wait=10.0, min_size=256):
 	headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 	text = text.strip()[:4096]
 	data = {
-		"model": "tts-1",
+		"model": "gpt-4o-mini-tts",  # "tts-1",
 		"input": text,
-		"voice": "ash",
+		"voice": "ash",  # "onyx",
 		"response_format": "wav",
+		"instructions": "Speak with intonation and emotions in the given sentences from the intense manga.",
 	}
 	for _ in range(retry):
 		resp = requests.post(
