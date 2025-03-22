@@ -2,168 +2,200 @@ from PIL import Image
 from functools import lru_cache
 import json
 import os
+import subprocess
 
 
-def get_image_files(directory):
-	return sorted([f for f in os.listdir(directory) if f.lower().endswith(".jpg")])
+def get_files_with_extension(directory, extension):
+	return sorted([f for f in os.listdir(directory) if f.lower().endswith(extension)])
 
 
-def get_json_files(directory):
-	return sorted([f for f in os.listdir(directory) if f.lower().endswith(".json")])
+def get_image_paths(directory):
+	return get_files_with_extension(directory, ".jpg")
 
 
-def create_stitched_image(img_dir):
-	image_files = get_image_files(img_dir)
-	first_image = Image.open(os.path.join(img_dir, image_files[0]))
+def get_json_paths(directory):
+	return get_files_with_extension(directory, ".json")
+
+
+def combine_images(img_dir):
+	image_paths = get_image_paths(img_dir)
+	first_image = Image.open(os.path.join(img_dir, image_paths[0]))
 	width, height = first_image.size
-	total_height = height * len(image_files)
-	stitched_image = Image.new("RGB", (width, total_height))
-	for i, img_file in enumerate(image_files):
-		img = Image.open(os.path.join(img_dir, img_file))
-		stitched_image.paste(img, (0, i * height))
-	return stitched_image, width
+	total_height = height * len(image_paths)
+	combined_image = Image.new("RGB", (width, total_height))
+	for i, img_path in enumerate(image_paths):
+		with Image.open(os.path.join(img_dir, img_path)) as img:
+			combined_image.paste(img, (0, i * height))
+	return combined_image, width
 
 
-def collect_delta_data(delta_dir):
-	delta_files = get_json_files(delta_dir)
+def load_all_delta_data(delta_dir):
+	delta_paths = get_json_paths(delta_dir)
 	all_deltas = []
-	for delta_file in delta_files:
-		with open(os.path.join(delta_dir, delta_file), "r") as f:
+	for delta_path in delta_paths:
+		with open(os.path.join(delta_dir, delta_path), "r") as f:
 			deltas = json.load(f)
 			all_deltas.append(deltas)
 	return all_deltas
 
 
-def read_duration_data(output_dir):
-	with open(os.path.join(output_dir, "audio_durations.json"), "r") as f:
+def load_duration_data(output_dir):
+	duration_path = os.path.join(output_dir, "audio_durations.json")
+	with open(duration_path, "r") as f:
 		return json.load(f)
 
 
-@lru_cache(maxsize=1024)
-def calculate_easing(t):
+@lru_cache(maxsize=2048)
+def compute_easing(t):
 	if t < 0.5:
 		return 4 * t * t * t
-	else:
-		return 1 - pow(-2 * t + 2, 3) / 2
+	return 1 - pow(-2 * t + 2, 3) / 2
 
 
-def make_directory(dir_path):
+def ensure_directory_exists(dir_path):
 	os.makedirs(dir_path, exist_ok=True)
 
 
-def write_frame(image, path, quality=100):
-	image.save(path, quality=quality)
+def setup_ffmpeg_process(output_file, width, height, fps):
+	cmd = [
+		"ffmpeg",
+		"-y",
+		"-hide_banner",
+		"-f",
+		"rawvideo",
+		"-c:v",
+		"rawvideo",
+		"-s",
+		f"{width}x{height}",
+		"-pix_fmt",
+		"rgb24",
+		"-r",
+		str(fps),
+		"-i",
+		"-",
+		"-c:v",
+		"h264_nvenc",
+		"-preset",
+		"p7",
+		"-rc",
+		"constqp",
+		"-profile:v",
+		"high",
+		"-g",
+		"999999",
+		output_file,
+	]
+	return subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
 
-def create_static_frames(image, output_dir, count):
-	for frame in range(count):
-		frame_filename = os.path.join(output_dir, f"frame_{frame:04d}.jpg")
-		write_frame(image, frame_filename)
-	return count
+def write_frame(image, ffmpeg_process):
+	raw_bytes = image.tobytes()
+	ffmpeg_process.stdin.write(raw_bytes)
 
 
-def process_segment(
-	stitched_image,
+def add_static_frames(image, ffmpeg_process, frame_count):
+	for _ in range(frame_count):
+		write_frame(image, ffmpeg_process)
+	return frame_count
+
+
+def process_animation_segment(
+	combined_image,
 	width,
 	height,
-	start_position,
+	start_y,
 	deltas,
 	duration,
-	output_dir,
-	start_frame,
+	ffmpeg_process,
+	frame_index,
 	fps,
 ):
-	segment_frames = int(duration * fps)
+	segment_frame_count = round(duration * fps)
 	if not deltas or sum(deltas) == 0:
-		viewport = stitched_image.crop(
-			(0, int(start_position), width, int(start_position + height))
-		)
-		for frame in range(segment_frames):
-			frame_filename = os.path.join(
-				output_dir, f"frame_{start_frame + frame:04d}.jpg"
-			)
-			write_frame(viewport, frame_filename)
-		return start_frame + segment_frames, start_position
-	positions = [start_position]
+		viewport = combined_image.crop((0, int(start_y), width, int(start_y + height)))
+		for _ in range(segment_frame_count):
+			write_frame(viewport, ffmpeg_process)
+		return frame_index + segment_frame_count, start_y
+	positions = [start_y]
 	for delta in deltas:
 		positions.append(positions[-1] + delta)
-	total_distance = sum(deltas)
-	time_proportions = [delta / total_distance for delta in deltas]
-	time_points = [0]
-	for proportion in time_proportions:
-		time_points.append(time_points[-1] + proportion * duration)
-	for frame in range(segment_frames):
-		current_time = frame / segment_frames * duration
-		sub_segment = 0
+	total_movement = sum(deltas)
+	time_ratios = [delta / total_movement for delta in deltas]
+	time_markers = [0]
+	for ratio in time_ratios:
+		time_markers.append(time_markers[-1] + ratio * duration)
+	for frame in range(segment_frame_count):
+		current_time = frame / segment_frame_count * duration
+		segment_index = 0
 		while (
-			sub_segment < len(time_points) - 1
-			and current_time > time_points[sub_segment + 1]
+			segment_index < len(time_markers) - 1
+			and current_time > time_markers[segment_index + 1]
 		):
-			sub_segment += 1
-		if sub_segment >= len(deltas):
+			segment_index += 1
+		if segment_index >= len(deltas):
 			y_position = positions[-1]
 		else:
-			sub_segment_duration = (
-				time_points[sub_segment + 1] - time_points[sub_segment]
+			segment_duration = (
+				time_markers[segment_index + 1] - time_markers[segment_index]
 			)
-			if sub_segment_duration == 0:
+			if segment_duration == 0:
 				progress = 1.0
 			else:
 				progress = (
-					current_time - time_points[sub_segment]
-				) / sub_segment_duration
-			eased_progress = calculate_easing(progress)
-			y_position = positions[sub_segment] + eased_progress * (
-				positions[sub_segment + 1] - positions[sub_segment]
-			)
-		y_position = max(0, min(y_position, stitched_image.height - height))
-		viewport = stitched_image.crop(
+					current_time - time_markers[segment_index]
+				) / segment_duration
+			eased_progress = compute_easing(progress)
+			position_delta = positions[segment_index + 1] - positions[segment_index]
+			y_position = positions[segment_index] + eased_progress * position_delta
+		y_position = max(0, min(y_position, combined_image.height - height))
+		viewport = combined_image.crop(
 			(0, int(y_position), width, int(y_position + height))
 		)
-		frame_filename = os.path.join(
-			output_dir, f"frame_{start_frame + frame:04d}.jpg"
-		)
-		write_frame(viewport, frame_filename)
-	return start_frame + segment_frames, positions[-1]
+		write_frame(viewport, ffmpeg_process)
+	return frame_index + segment_frame_count, positions[-1]
 
 
-def build_animation_frames(
-	stitched_image, width, all_deltas, durations, output_dir, static_duration=5.0
+def create_animation_video(
+	combined_image, width, all_deltas, durations, output_file, static_duration=5.0
 ):
-	make_directory(output_dir)
 	fps = 30
 	height = 1350
-	static_intro_frames = int(static_duration * fps)
-	initial_viewport = stitched_image.crop((0, 0, width, height))
-	current_frame = create_static_frames(
-		initial_viewport, output_dir, static_intro_frames
+	ffmpeg_process = setup_ffmpeg_process(output_file, width, height, fps)
+	intro_frame_count = round(static_duration * fps)
+	initial_viewport = combined_image.crop((0, 0, width, height))
+	current_frame = add_static_frames(
+		initial_viewport, ffmpeg_process, intro_frame_count
 	)
-	current_position = 0
-	for segment_idx, (deltas, duration) in enumerate(zip(all_deltas, durations)):
-		current_frame, current_position = process_segment(
-			stitched_image,
+	current_y = 0
+	for deltas, duration in zip(all_deltas, durations):
+		current_frame, current_y = process_animation_segment(
+			combined_image,
 			width,
 			height,
-			current_position,
+			current_y,
 			deltas,
 			duration,
-			output_dir,
+			ffmpeg_process,
 			current_frame,
 			fps,
 		)
+	ffmpeg_process.stdin.close()
+	ffmpeg_process.wait()
 	return current_frame
 
 
-def generate_scrolling_animation(
-	img_dir, delta_dir, output_dir, static_intro_duration=6.0
+def create_scrolling_video(
+	img_dir, delta_dir, output_dir, output_file, intro_duration=6.0
 ):
-	stitched_image, width = create_stitched_image(img_dir)
-	all_deltas = collect_delta_data(delta_dir)
-	durations = read_duration_data(output_dir)
+	ensure_directory_exists(output_dir)
+	output_path = os.path.join(output_dir, output_file)
+	combined_image, width = combine_images(img_dir)
+	all_deltas = load_all_delta_data(delta_dir)
+	durations = load_duration_data(output_dir)
 	if len(all_deltas) != len(durations):
 		return 0
-	total_frames = build_animation_frames(
-		stitched_image, width, all_deltas, durations, output_dir, static_intro_duration
+	total_frames = create_animation_video(
+		combined_image, width, all_deltas, durations, output_path, intro_duration
 	)
 	return total_frames
 
@@ -172,6 +204,11 @@ if __name__ == "__main__":
 	img_directory = "img"
 	delta_directory = "delta"
 	output_directory = "output"
-	generate_scrolling_animation(
-		img_directory, delta_directory, output_directory, static_intro_duration=5.0
+	output_filename = "scroll.mkv"
+	create_scrolling_video(
+		img_directory,
+		delta_directory,
+		output_directory,
+		output_filename,
+		intro_duration=0.0,
 	)

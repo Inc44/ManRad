@@ -33,6 +33,21 @@ def calculate_y_deltas(centers, image_height):
 	return deltas
 
 
+def merge_small_deltas(deltas, threshold=50):
+	if not deltas:
+		return []
+	merged_deltas = []
+	current_group = deltas[0]
+	for i in range(1, len(deltas)):
+		if deltas[i] < threshold:
+			current_group += deltas[i]
+		else:
+			merged_deltas.append(current_group)
+			current_group = deltas[i]
+	merged_deltas.append(current_group)
+	return merged_deltas
+
+
 ocr_engine = PaddleOCR(lang="en")
 image_directory = "img"
 annotated_directory = "annotated"
@@ -47,14 +62,6 @@ for filename in os.listdir(image_directory):
 			for line in ocr_result:
 				print(line)
 		"""
-		ocr_result = ocr_results[0]
-		"""
-		image = Image.open(image_path).convert("RGB")
-		annotated_image = draw_ocr(image, ocr_result)
-		annotated_image = Image.fromarray(annotated_image)
-		annotated_image_path = os.path.join(annotated_directory, filename)
-		annotated_image.save(annotated_image_path)
-		"""
 		if ocr_results and len(ocr_results) > 0:
 			ocr_result = ocr_results[0]
 		else:
@@ -64,11 +71,18 @@ for filename in os.listdir(image_directory):
 		shape_centers = calculate_shape_centers(ocr_result)
 		shape_centers.sort(key=lambda center: center[1]) if shape_centers else []
 		y_deltas = calculate_y_deltas(shape_centers, image_height)
+		merged_deltas = merge_small_deltas(y_deltas, threshold=50)
 		directory, base_name = os.path.split(image_path)
 		root, _ = os.path.splitext(base_name)
 		output_directory = "delta"
-		output_extension = ".json"
-		output_file_path = os.path.join(output_directory, root + output_extension)
 		os.makedirs(output_directory, exist_ok=True)
+		output_file_path = os.path.join(output_directory, root + ".json")
 		with open(output_file_path, "w") as json_file:
-			json.dump(y_deltas, json_file, indent="\t")
+			json.dump(merged_deltas, json_file, indent="\t")
+		"""
+		image = Image.open(image_path).convert("RGB")
+		annotated_image = draw_ocr(image, ocr_result)
+		annotated_image = Image.fromarray(annotated_image)
+		annotated_image_path = os.path.join(annotated_directory, filename)
+		annotated_image.save(annotated_image_path)
+		"""
