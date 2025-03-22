@@ -20,12 +20,21 @@ def get_json_paths(directory):
 def combine_images(img_dir):
 	image_paths = get_image_paths(img_dir)
 	first_image = Image.open(os.path.join(img_dir, image_paths[0]))
-	width, height = first_image.size
-	total_height = height * len(image_paths)
-	combined_image = Image.new("RGB", (width, total_height))
-	for i, img_path in enumerate(image_paths):
+	width, _ = first_image.size
+	total_height = 0
+	image_positions = [0]
+	for img_path in image_paths:
 		with Image.open(os.path.join(img_dir, img_path)) as img:
-			combined_image.paste(img, (0, i * height))
+			_, height = img.size
+			total_height += height
+			image_positions.append(total_height)
+	image_positions.pop()
+	combined_image = Image.new("RGB", (width, total_height))
+	current_y = 0
+	for img_path in image_paths:
+		with Image.open(os.path.join(img_dir, img_path)) as img:
+			combined_image.paste(img, (0, current_y))
+			current_y += img.size[1]
 	return combined_image, width
 
 

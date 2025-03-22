@@ -57,7 +57,7 @@ conda activate paddle
 python -OO Delta.py
 conda activate ManRad
 python -OO Scroll.py
-ffmpeg -i output/scroll.mkv -i output/audio.wav -c copy output/result.mkv
+ffmpeg -i output/scroll.mkv -i output/audio.opus -c copy output/result.mkv
 ffprobe -i output/audio.opus
 ffprobe -i output/scroll.mkv
 ffprobe -i output/result.mkv
