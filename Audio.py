@@ -7,11 +7,11 @@ import soundfile as sf
 import subprocess
 
 
-def create_silence(duration=1.0, sr=24000):
+def create_silence(duration=4.0, sr=24000):
 	return np.zeros(int(sr * duration))
 
 
-def extend_audio_with_silence(audio, sr, target_duration=1.0):
+def extend_audio_with_silence(audio, sr, target_duration=4.0):
 	current_duration = len(audio) / sr
 	if current_duration >= target_duration:
 		return audio
@@ -21,7 +21,7 @@ def extend_audio_with_silence(audio, sr, target_duration=1.0):
 	return extended_audio
 
 
-def process_audio_file(jpg_path, wav_dir, target_duration=1.0):
+def process_audio_file(jpg_path, wav_dir, target_duration=4.0):
 	base_name = os.path.splitext(os.path.basename(jpg_path))[0]
 	wav_path = os.path.join(wav_dir, f"{base_name}.wav")
 	sr = 24000
@@ -50,7 +50,7 @@ def process_audio_file(jpg_path, wav_dir, target_duration=1.0):
 	return base_name, duration
 
 
-def process_audio_files(img_dir, wav_dir, target_duration=1.0):
+def process_audio_files(img_dir, wav_dir, target_duration=4.0):
 	os.makedirs(wav_dir, exist_ok=True)
 	jpg_files = sorted(glob(os.path.join(img_dir, "*.jpg")))
 	jpg_basenames = []
@@ -126,7 +126,7 @@ def process_and_merge_audio(
 	img_directory,
 	wav_directory,
 	output_directory,
-	target_duration=1.0,
+	target_duration=4.0,
 	use_transition=False,
 ):
 	os.makedirs(wav_directory, exist_ok=True)
@@ -151,7 +151,7 @@ if __name__ == "__main__":
 	wav_directory = "wav"
 	output_directory = "output"
 	use_transition = False
-	target_duration = 1.0
+	target_duration = 4.0
 	process_and_merge_audio(
 		img_directory, wav_directory, output_directory, target_duration, use_transition
 	)

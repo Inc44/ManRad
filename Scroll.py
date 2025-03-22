@@ -1,6 +1,7 @@
 from PIL import Image
 from functools import lru_cache
 import json
+import math
 import os
 import subprocess
 
@@ -54,10 +55,20 @@ def load_duration_data(output_dir):
 
 
 @lru_cache(maxsize=2048)
-def compute_easing(t):
+def cubic_easing(t):
 	if t < 0.5:
 		return 4 * t * t * t
 	return 1 - pow(-2 * t + 2, 3) / 2
+
+
+@lru_cache(maxsize=2048)
+def acceleration_easing(t):
+	if t < 0.4:
+		return 2.5 * t * t
+	elif t < 0.8:
+		return 0.4 + (t - 0.4) * 1.2
+	else:
+		return 0.88 + (1 - math.pow(1 - (t - 0.8) / 0.2, 2)) * 0.12
 
 
 def ensure_directory_exists(dir_path):
@@ -69,8 +80,8 @@ def setup_ffmpeg_process(output_file, width, height, fps):
 		"ffmpeg",
 		"-y",
 		"-hide_banner",
-		# "-loglevel",
-		# "error",
+		"-loglevel",
+		"error",
 		"-f",
 		"rawvideo",
 		"-c:v",
@@ -83,6 +94,8 @@ def setup_ffmpeg_process(output_file, width, height, fps):
 		str(fps),
 		"-i",
 		"-",
+		# "-vf",
+		# "mpdecimate",
 		"-c:v",
 		"h264_nvenc",
 		"-preset",
@@ -154,7 +167,7 @@ def process_animation_segment(
 				progress = (
 					current_time - time_markers[segment_index]
 				) / segment_duration
-			eased_progress = compute_easing(progress)
+			eased_progress = acceleration_easing(progress)
 			position_delta = positions[segment_index + 1] - positions[segment_index]
 			y_position = positions[segment_index] + eased_progress * position_delta
 		y_position = max(0, min(y_position, combined_image.height - height))
@@ -168,7 +181,7 @@ def process_animation_segment(
 def create_animation_video(
 	combined_image, width, all_deltas, durations, output_file, static_duration=5.0
 ):
-	fps = 30
+	fps = 60
 	height = 1350
 	ffmpeg_process = setup_ffmpeg_process(output_file, width, height, fps)
 	intro_frame_count = round(static_duration * fps)
