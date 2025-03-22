@@ -25,7 +25,7 @@ echo %MELO_API_KEY%
 
 ```
 git clone https://github.com/myshell-ai/OpenVoice.git ...
-cd OpenVoice || cd ManRad
+cd OpenVoice || cd ManRad/test/tts
 ```
 
 ```

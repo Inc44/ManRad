@@ -8,8 +8,7 @@
 **/*.png
 **/*.pyc
 **/*.safetensor
-**/*.txt
 **/*.wav
 **/*.zip
 checkpoints*/**
-openvoice/**
+test/tts/openvoice/**
