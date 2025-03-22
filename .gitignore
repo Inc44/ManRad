@@ -10,5 +10,6 @@
 **/*.safetensor
 **/*.wav
 **/*.zip
+output/**
 test/tts/checkpoints*/**
 test/tts/openvoice/**

@@ -3,6 +3,36 @@ from PIL import Image
 import os
 import json
 
+
+def calculate_shape_centers(ocr_results):
+	if ocr_results is None:
+		return []
+	centers = []
+	for shape in ocr_results:
+		sum_x = 0
+		sum_y = 0
+		for point in shape:
+			sum_x += point[0]
+			sum_y += point[1]
+		center_x = sum_x / len(shape)
+		center_y = sum_y / len(shape)
+		centers.append([center_x, center_y])
+	return centers
+
+
+def calculate_y_deltas(centers, image_height):
+	deltas = []
+	if centers:
+		deltas.append(centers[0][1])
+		for i in range(1, len(centers)):
+			delta_y = centers[i][1] - centers[i - 1][1]
+			deltas.append(delta_y)
+		deltas.append(image_height - centers[-1][1])
+	else:
+		deltas.append(image_height)
+	return deltas
+
+
 ocr_engine = PaddleOCR(lang="en")
 image_directory = "img"
 annotated_directory = "annotated"
@@ -25,35 +55,14 @@ for filename in os.listdir(image_directory):
 		annotated_image_path = os.path.join(annotated_directory, filename)
 		annotated_image.save(annotated_image_path)
 		"""
-
-		def calculate_shape_centers(ocr_results):
-			centers = []
-			for shape in ocr_results:
-				sum_x = 0
-				sum_y = 0
-				for point in shape:
-					sum_x += point[0]
-					sum_y += point[1]
-				center_x = sum_x / len(shape)
-				center_y = sum_y / len(shape)
-				centers.append([center_x, center_y])
-			return centers
-
-		shape_centers = calculate_shape_centers(ocr_result)
-		shape_centers.sort(key=lambda center: center[1])
-
-		def calculate_y_deltas(centers, image_height):
-			deltas = []
-			if centers:
-				deltas.append(centers[0][1])
-				for i in range(1, len(centers)):
-					delta_y = centers[i][1] - centers[i - 1][1]
-					deltas.append(delta_y)
-				deltas.append(image_height - centers[-1][1])
-			return deltas
-
+		if ocr_results and len(ocr_results) > 0:
+			ocr_result = ocr_results[0]
+		else:
+			ocr_result = None
 		image = Image.open(image_path)
 		image_height = image.height
+		shape_centers = calculate_shape_centers(ocr_result)
+		shape_centers.sort(key=lambda center: center[1]) if shape_centers else []
 		y_deltas = calculate_y_deltas(shape_centers, image_height)
 		directory, base_name = os.path.split(image_path)
 		root, _ = os.path.splitext(base_name)

@@ -171,7 +171,7 @@ def generate_scrolling_animation(
 if __name__ == "__main__":
 	img_directory = "img"
 	delta_directory = "delta"
-	output_directory = "output2"
+	output_directory = "output"
 	generate_scrolling_animation(
 		img_directory, delta_directory, output_directory, static_intro_duration=5.0
 	)
