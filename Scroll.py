@@ -21,20 +21,19 @@ def combine_images(img_dir):
 	image_paths = get_image_paths(img_dir)
 	first_image = Image.open(os.path.join(img_dir, image_paths[0]))
 	width, _ = first_image.size
+	first_image.close()
+	images = []
 	total_height = 0
-	image_positions = [0]
 	for img_path in image_paths:
-		with Image.open(os.path.join(img_dir, img_path)) as img:
-			_, height = img.size
-			total_height += height
-			image_positions.append(total_height)
-	image_positions.pop()
+		img = Image.open(os.path.join(img_dir, img_path))
+		images.append(img)
+		total_height += img.size[1]
 	combined_image = Image.new("RGB", (width, total_height))
 	current_y = 0
-	for img_path in image_paths:
-		with Image.open(os.path.join(img_dir, img_path)) as img:
-			combined_image.paste(img, (0, current_y))
-			current_y += img.size[1]
+	for img in images:
+		combined_image.paste(img, (0, current_y))
+		current_y += img.size[1]
+		img.close()
 	return combined_image, width
 
 
@@ -70,8 +69,8 @@ def setup_ffmpeg_process(output_file, width, height, fps):
 		"ffmpeg",
 		"-y",
 		"-hide_banner",
-		"-loglevel",
-		"error",
+		# "-loglevel",
+		# "error",
 		"-f",
 		"rawvideo",
 		"-c:v",
