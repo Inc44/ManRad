@@ -3,6 +3,7 @@ import base64
 import concurrent.futures
 import json
 import os
+import re
 import requests
 import sys
 import time
@@ -23,7 +24,7 @@ def extract_text(img_path, retry=10, wait=10.0):
 				"content": [
 					{
 						"type": "text",
-						"text": 'Return bounding boxes in the correct manga page reading order, from right to left, along with their corresponding text content to be read aloud: [{"box_2d": [y1, x1, y2, x2], "text": "text content"}, ...]',
+						"text": 'Arrange text using proper manga reading order (right-to-left) optimized for text-to-speech. Output as JSON with objects containing only character dialogue; omit any shouts or sidenotes. [{ "text": "text content" }, ...].',
 					},
 					{
 						"type": "image_url",
@@ -51,7 +52,9 @@ def extract_text(img_path, retry=10, wait=10.0):
 			start = content.find("[")
 			end = content.rfind("]") + 1
 			if start >= 0 and end > start:
-				result = json.loads(content[start:end])
+				json_str = content[start:end]
+				json_str = re.sub(r"[\x00-\x1F\x7F]", "", json_str)
+				result = json.loads(json_str)
 				if (
 					result
 					and isinstance(result, list)
@@ -89,8 +92,8 @@ def process_image(img_path, img_dir, json_dir):
 			if verify_json_file(str(json_path)):
 				return {"image": str(img_path), "json": str(json_path)}
 	return {
-		"image": (img_path),
-		"json": (json_path),
+		"image": str(img_path),
+		"json": str(json_path),
 		"error": "Processing failed",
 	}
 
