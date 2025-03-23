@@ -1,5 +1,6 @@
 from PIL import Image
 import os
+import re
 import shutil
 import sys
 import zipfile
@@ -43,26 +44,42 @@ def move_files(src, dst, exts):
 			shutil.move(src_path, dst_path)
 
 
+def natural_sort_key(s):
+	s = s.lower()
+	return [int(c) if c.isdigit() else c for c in re.split(r"(\d+)", s)]
+
+
+def extract_volume_chapter(path):
+	vol_num = 0
+	ch_num = 0
+	vol_match = re.search(r"vol\.?\s*(\d+)", path.lower())
+	if vol_match:
+		vol_num = int(vol_match.group(1))
+	ch_match = re.search(r"ch\.?\s*(\d+(?:\.\d+)?)", path.lower())
+	if ch_match:
+		ch_num = float(ch_match.group(1))
+	return (vol_num, ch_num, path)
+
+
 def find_source_paths(src):
 	if not os.path.isdir(src):
 		return [src]
 	subdirs = [d for d in os.listdir(src) if os.path.isdir(os.path.join(src, d))]
 	if not subdirs:
 		return [src]
-	subdirs.sort()
-	return [os.path.join(src, d) for d in subdirs]
+	sorted_dirs = sorted(subdirs, key=natural_sort_key)
+	return [os.path.join(src, d) for d in sorted_dirs]
 
 
-def collect_image_files(paths):
-	image_exts = [".jpg", ".png", ".webp"]
-	all_images = []
-	for path in paths:
-		for root, _, files in os.walk(path):
-			for f in files:
-				if any(f.lower().endswith(ext) for ext in image_exts):
-					all_images.append(os.path.join(root, f))
-	all_images.sort()
-	return all_images
+def collect_image_files(path):
+	image_exts = [".jpg", ".jpeg", ".png", ".webp"]
+	images = []
+	for root, _, files in os.walk(path):
+		for f in files:
+			if any(f.lower().endswith(ext) for ext in image_exts):
+				images.append(os.path.join(root, f))
+	images.sort(key=natural_sort_key)
+	return images
 
 
 def process_image(img_file, dst, counter):
@@ -86,9 +103,10 @@ def process_image(img_file, dst, counter):
 def process_images(src, dst):
 	counter = 0
 	source_paths = find_source_paths(src)
-	image_files = collect_image_files(source_paths)
-	for img_file in image_files:
-		counter = process_image(img_file, dst, counter)
+	for path in source_paths:
+		image_files = collect_image_files(path)
+		for img_file in image_files:
+			counter = process_image(img_file, dst, counter)
 	return counter
 
 
