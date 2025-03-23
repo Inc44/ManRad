@@ -95,7 +95,7 @@ def process_image(img_path, img_dir, json_dir):
 	}
 
 
-def process_dir(base_dir, max_workers=4):
+def process_dir(base_dir, max_workers=10):
 	base_dir = Path(base_dir)
 	img_dir = base_dir / "img"
 	json_dir = base_dir / "json"

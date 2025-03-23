@@ -2,6 +2,7 @@ import concurrent.futures
 import glob
 import json
 import os
+import regex
 
 
 def parse_json(path):
@@ -49,4 +50,6 @@ def process_dir(make_audio, base, workers=10):
 
 
 def format(path):
-	return parse_json(path).capitalize().replace("\n", " ")
+	text = parse_json(path).capitalize().replace("\n", " ")
+	pattern = r"[^\p{Latin}\p{Cyrillic}\p{P}\d\s]"
+	return regex.sub(pattern, "", text, flags=regex.UNICODE)
