@@ -10,10 +10,12 @@ def parse_json(path):
 		data = json.load(f)
 	if isinstance(data, list):
 		return " ".join(
-			item.get("text", "") for item in data if isinstance(item, dict)
+			item.get("text", "").replace("\n", " ")
+			for item in data
+			if isinstance(item, dict)
 		).strip()
 	if isinstance(data, dict):
-		return data.get("text", "").strip()
+		return data.get("text", "").replace("\n", " ").strip()
 	return ""
 
 
@@ -50,6 +52,11 @@ def process_dir(make_audio, base, workers=10):
 
 
 def format(path):
-	text = parse_json(path).capitalize().replace("\n", " ")
+	text = parse_json(path)
 	pattern = r"[^\p{Latin}\p{Cyrillic}\p{P}\d\s]"
-	return regex.sub(pattern, "", text, flags=regex.UNICODE)
+	text = regex.sub(pattern, "", text, flags=regex.UNICODE)
+	text = text.replace("- ", "")
+	text = regex.sub(r"\s+", " ", text)
+	if text and len(text) > 0:
+		text = text[0].upper() + text[1:]
+	return text.strip()
