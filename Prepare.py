@@ -1,3 +1,4 @@
+from PIL import Image
 import os
 import shutil
 import sys
@@ -42,14 +43,68 @@ def move_files(src, dst, exts):
 			shutil.move(src_path, dst_path)
 
 
-def run(zip_path):
-	dirs = ["cbz", "temp", "img"]
-	make_dirs(dirs)
-	unzip(zip_path, "cbz")
-	keep_files("cbz", "volume")
-	extract_comics("cbz", "temp")
-	move_files("temp", "img", [".jpg"])
-	shutil.rmtree("temp")
+def find_source_paths(src):
+	if not os.path.isdir(src):
+		return [src]
+	subdirs = [d for d in os.listdir(src) if os.path.isdir(os.path.join(src, d))]
+	if not subdirs:
+		return [src]
+	subdirs.sort()
+	return [os.path.join(src, d) for d in subdirs]
+
+
+def collect_image_files(paths):
+	image_exts = [".jpg", ".png", ".webp"]
+	all_images = []
+	for path in paths:
+		for root, _, files in os.walk(path):
+			for f in files:
+				if any(f.lower().endswith(ext) for ext in image_exts):
+					all_images.append(os.path.join(root, f))
+	all_images.sort()
+	return all_images
+
+
+def process_image(img_file, dst, counter):
+	_, ext = os.path.splitext(img_file)
+	ext = ext.lower()
+	if ext in [".webp", ".png"]:
+		img = Image.open(img_file)
+		if img.mode not in ["L", "RGB"]:
+			img = img.convert("RGB")
+		new_ext = ".jpg"
+		new_name = f"{counter:04d}{new_ext}"
+		new_path = os.path.join(dst, new_name)
+		img.save(new_path, "JPEG", quality=100)
+		return counter + 1
+	new_name = f"{counter:04d}{ext}"
+	new_path = os.path.join(dst, new_name)
+	shutil.copy2(img_file, new_path)
+	return counter + 1
+
+
+def process_images(src, dst):
+	counter = 0
+	source_paths = find_source_paths(src)
+	image_files = collect_image_files(source_paths)
+	for img_file in image_files:
+		counter = process_image(img_file, dst, counter)
+	return counter
+
+
+def run(input_path):
+	if os.path.isdir(input_path):
+		dirs = ["img"]
+		make_dirs(dirs)
+		process_images(input_path, "img")
+	else:
+		dirs = ["cbz", "temp", "img"]
+		make_dirs(dirs)
+		unzip(input_path, "cbz")
+		keep_files("cbz", "volume")
+		extract_comics("cbz", "temp")
+		move_files("temp", "img", [".jpg"])
+		shutil.rmtree("temp")
 
 
 if __name__ == "__main__":

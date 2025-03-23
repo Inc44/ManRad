@@ -9,6 +9,7 @@
 **/*.pyc
 **/*.safetensor
 **/*.wav
+**/*.webp
 **/*.zip
 output/**
 test/tts/checkpoints*/**
