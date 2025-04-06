@@ -7,7 +7,7 @@ import os
 
 DISTANCE = 32
 MARGIN = 16
-THRESHOLD = 64
+THRESHOLD = 96
 
 
 def calculate_box_distance(box1, box2):
@@ -166,7 +166,17 @@ def save_deltas_to_json(deltas, output_dir, filename_base):
 
 
 def process_images_with_ocr():
-	ocr_engine = PaddleOCR(lang="en")
+	ocr_engine = PaddleOCR(
+		use_gpu=True,
+		gpu_mem=1337,
+		det_db_box_thresh=0.69,
+		show_log=True,
+		layout=False,
+		table=False,
+		ocr=False,
+		lang="en",
+		rec=False,
+	)
 	image_dir = "img"
 	crops_dir = "crops"
 	annotated_small_dir = "annotated"
