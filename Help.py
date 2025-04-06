@@ -29,6 +29,8 @@ def process_file(make_audio, path, out_dir):
 	if is_valid(out):
 		return {"file": path, "audio": out, "status": "skipped"}
 	text = format(path)
+	if not text:
+		return {"file": path, "audio": out, "status": "empty_text"}
 	ok = make_audio(text, out)
 	status = "created" if ok else "failed"
 	return {"file": path, "audio": out, "status": status}
