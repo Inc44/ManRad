@@ -70,7 +70,7 @@ def extract_text(img_path, retry=10, wait=10.0):
 	return []
 
 
-def verify_json_file(json_path, min_size=32):
+def verify_json_file(json_path, min_size=26):
 	if not os.path.exists(json_path):
 		return False
 	file_size = os.path.getsize(json_path)
@@ -96,7 +96,10 @@ def process_image(img_path, img_dir, json_dir):
 			with open(json_path, "w", encoding="utf-8") as f:
 				json.dump(text_data, f, indent="\t", ensure_ascii=False)
 			if verify_json_file(str(json_path)):
-				return {"image": str(img_path), "json": str(json_path)}
+				return {
+					"image": str(img_path),
+					"json": str(json_path),
+				}
 	return {
 		"image": str(img_path),
 		"json": str(json_path),
