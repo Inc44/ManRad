@@ -1,9 +1,11 @@
 from PIL import Image, ImageDraw
 from paddleocr import PaddleOCR, draw_ocr
+import concurrent.futures
 import json
 import math
 import numpy as np
 import os
+from tqdm import tqdm
 
 DISTANCE = 32
 MARGIN = 16
@@ -165,16 +167,55 @@ def save_deltas_to_json(deltas, output_dir, filename_base):
 		json.dump(deltas, json_file, indent="\t", ensure_ascii=False)
 
 
+def process_single_image(
+	filename,
+	ocr_engine,
+	image_dir,
+	crops_dir,
+	annotated_small_dir,
+	annotated_grouped_dir,
+	delta_dir,
+):
+	if not filename.lower().endswith((".jpg")):
+		return
+	image_path = os.path.join(image_dir, filename)
+	ocr_results = ocr_engine.ocr(image_path, rec=False)
+	if not ocr_results or len(ocr_results) == 0 or not ocr_results[0]:
+		return
+	ocr_result = ocr_results[0]
+	image = Image.open(image_path).convert("RGB")
+	small_boxes_image = draw_ocr(np.array(image), ocr_result)
+	small_boxes_image = Image.fromarray(small_boxes_image)
+	small_annotated_path = os.path.join(annotated_small_dir, filename)
+	small_boxes_image.save(small_annotated_path)
+	groups = find_connected_components(ocr_result)
+	grouped_boxes, group_centers = calculate_group_boxes(ocr_result, groups)
+	sorted_indices = sort_boxes_by_topright_and_height(
+		group_centers, grouped_boxes, image.width
+	)
+	grouped_boxes_image = draw_grouped_boxes(image, grouped_boxes, sorted_indices)
+	grouped_annotated_path = os.path.join(annotated_grouped_dir, filename)
+	grouped_boxes_image.save(grouped_annotated_path)
+	root, _ = os.path.splitext(filename)
+	crop_and_save_boxes(image, grouped_boxes, sorted_indices, crops_dir, root)
+	height_deltas = calculate_height_deltas(
+		group_centers, grouped_boxes, sorted_indices, image.height
+	)
+	save_deltas_to_json(height_deltas, delta_dir, root)
+	return filename
+
+
 def process_images_with_ocr():
 	ocr_engine = PaddleOCR(
-		use_gpu=True,
-		gpu_mem=1337,
-		show_log=False,
-		layout=False,
-		table=False,
-		ocr=False,
+		gpu_mem=4000,
 		lang="en",
+		layout=False,
+		ocr=False,
 		rec=False,
+		show_log=False,
+		table=False,
+		use_angle_cls=True,
+		use_gpu=True,
 	)
 	image_dir = "img"
 	crops_dir = "crops"
@@ -184,33 +225,30 @@ def process_images_with_ocr():
 	create_required_directories(
 		[crops_dir, annotated_small_dir, annotated_grouped_dir, delta_dir]
 	)
-	for filename in os.listdir(image_dir):
-		if not filename.lower().endswith((".jpg")):
-			continue
-		image_path = os.path.join(image_dir, filename)
-		ocr_results = ocr_engine.ocr(image_path, rec=False)
-		if not ocr_results or len(ocr_results) == 0 or not ocr_results[0]:
-			continue
-		ocr_result = ocr_results[0]
-		image = Image.open(image_path).convert("RGB")
-		small_boxes_image = draw_ocr(np.array(image), ocr_result)
-		small_boxes_image = Image.fromarray(small_boxes_image)
-		small_annotated_path = os.path.join(annotated_small_dir, filename)
-		small_boxes_image.save(small_annotated_path)
-		groups = find_connected_components(ocr_result, 32)
-		grouped_boxes, group_centers = calculate_group_boxes(ocr_result, groups)
-		sorted_indices = sort_boxes_by_topright_and_height(
-			group_centers, grouped_boxes, image.width
-		)
-		grouped_boxes_image = draw_grouped_boxes(image, grouped_boxes, sorted_indices)
-		grouped_annotated_path = os.path.join(annotated_grouped_dir, filename)
-		grouped_boxes_image.save(grouped_annotated_path)
-		root, _ = os.path.splitext(filename)
-		crop_and_save_boxes(image, grouped_boxes, sorted_indices, crops_dir, root)
-		height_deltas = calculate_height_deltas(
-			group_centers, grouped_boxes, sorted_indices, image.height
-		)
-		save_deltas_to_json(height_deltas, delta_dir, root)
+	filenames = [f for f in os.listdir(image_dir) if f.lower().endswith(".jpg")]
+	with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+		futures = [
+			executor.submit(
+				process_single_image,
+				filename,
+				ocr_engine,
+				image_dir,
+				crops_dir,
+				annotated_small_dir,
+				annotated_grouped_dir,
+				delta_dir,
+			)
+			for filename in filenames
+		]
+		for future in tqdm(
+			concurrent.futures.as_completed(futures),
+			total=len(futures),
+			desc="Processing images",
+		):
+			try:
+				filename = future.result()
+			except Exception as exc:
+				print(f"Image processing generated an exception: {exc}")
 
 
 if __name__ == "__main__":
