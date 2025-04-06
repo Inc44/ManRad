@@ -20,8 +20,8 @@ def make_audio(
 	retry=5,
 	wait=5.0,
 	min_size=256,
-	reference_audio="g:/My Drive/Files/Else/AI/llElevenLabs/Voice Cloning/Source/De.flac",
-	reference_text_path="c:/Users/pc/Desktop/De.txt",
+	reference_audio=r"g:\My Drive\Files\Else\AI\llElevenLabs\Voice Cloning\Source\Nas.flac",
+	reference_text_path=r"g:\My Drive\Files\Else\AI\Fish Speech\source2\Nas.txt",
 	url="http://127.0.0.1:8080/v1/tts",
 ):
 	text = text.strip()[:4096]
