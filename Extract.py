@@ -9,11 +9,9 @@ import sys
 import time
 
 KEY = os.environ.get("DEEPINFRA_API_KEY")
-MODEL = "google/gemma-3-27b-it"
+MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
 LANGUAGE = "Russian"
-PROMPT = f"""Provide the result ONLY, without any introductory phrases or additional commentary in {LANGUAGE}
-Proofread this text but only fix grammar
-Return JSON: [{{"text": "text content"}}, ...]"""
+PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any introductory phrases or additional commentary. If no readable text is found, the text content is empty. Return JSON: [{{"text": "text content"}}, ...]'
 ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 
 
