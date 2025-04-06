@@ -21,11 +21,15 @@ def make_audio(
 	wait=5.0,
 	min_size=256,
 	reference_audio="g:/My Drive/Files/Else/AI/llElevenLabs/Voice Cloning/Source/De.flac",
-	reference_text="Der nationalen Regierung auf den Gebieten des wirtschaftlichen Lebens. Hier wird ein Gesetz alles Handeln bestimmen. Das Volk lebt nicht für die Wirtschaft, und die Wirtschaft existiert nicht für das Kapital, sondern das Kapital dient der Wirtschaft und die Wirtschaft dem Volk. So ist es! Und der Bruch der uns in den 14 Punkten Wilsons gemachten Zusicherungen begann für Deutschland, das heißt für das schaffende deutsche Volk, eine Zeit grenzenlosen Unglücks. Er wäre auch ohne Weiteres bereit, seine gesamte militärische Einrichtung überhaupt aufzulösen und den kleinen Rest der ihm verbliebenen Waffen zu zerstören, wenn die anliegenden Nationen ebenso rechnen.",
+	reference_text_path="c:/Users/pc/Desktop/De.txt",
 	url="http://127.0.0.1:8080/v1/tts",
 ):
 	text = text.strip()[:4096]
 	references = []
+	reference_text = None
+	if os.path.exists(reference_text_path):
+		with open(reference_text_path, "r", encoding="utf-8") as f:
+			reference_text = f.read().strip()
 	audio_base64 = audio_to_base64(reference_audio)
 	if reference_audio and reference_text and audio_base64:
 		references.append({"audio": audio_base64, "text": reference_text})
