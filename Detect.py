@@ -121,7 +121,7 @@ def crop_and_save_boxes(image, boxes, sorted_indices, output_dir, filename_base)
 		max_x = min(image.width, int(max_x))
 		max_y = min(image.height, int(max_y))
 		crop = image.crop((min_x, min_y, max_x, max_y))
-		crop_path = os.path.join(output_dir, f"{filename_base}{i+1}.jpg")
+		crop_path = os.path.join(output_dir, f"{filename_base}{i+1:03d}.jpg")
 		crop.save(crop_path, quality=100)
 
 

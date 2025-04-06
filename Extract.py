@@ -8,23 +8,30 @@ import requests
 import sys
 import time
 
+KEY = os.environ.get("GEMINI_API_KEY")
+LANGUAGE = "Russian"
+PROMPT = f"""Provide the result ONLY, without any introductory phrases or additional commentary in {LANGUAGE}
+Proofread this text but only fix grammar
+Return JSON: [{{"text": "text content"}}, ...]"""
+ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
 
 def extract_text(img_path, retry=10, wait=10.0):
 	with open(img_path, "rb") as f:
 		b64 = base64.b64encode(f.read()).decode("utf-8")
 	headers = {
 		"Content-Type": "application/json",
-		"Authorization": f"Bearer {os.environ.get('GEMINI_API_KEY')}",
+		"Authorization": f"Bearer {KEY}",
 	}
 	payload = {
-		"model": "gemini-2.0-flash-001",
+		"model": "google/gemma-3-27b-it",
 		"messages": [
 			{
 				"role": "user",
 				"content": [
 					{
 						"type": "text",
-						"text": 'Arrange text using proper manga reading order (right-to-left) optimized for text-to-speech. Output as JSON with objects containing only character dialogue; omit any shouts or sidenotes. [{ "text": "text content" }, ...].',
+						"text": PROMPT,
 					},
 					{
 						"type": "image_url",
@@ -38,7 +45,7 @@ def extract_text(img_path, retry=10, wait=10.0):
 	}
 	for attempt in range(retry):
 		resp = requests.post(
-			"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+			ENDPOINT,
 			headers=headers,
 			json=payload,
 		)
@@ -100,7 +107,7 @@ def process_image(img_path, img_dir, json_dir):
 
 def process_dir(base_dir, max_workers=10):
 	base_dir = Path(base_dir)
-	img_dir = base_dir / "img"
+	img_dir = base_dir / "crops"
 	json_dir = base_dir / "json"
 	os.makedirs(json_dir, exist_ok=True)
 	if not img_dir.exists() or not img_dir.is_dir():

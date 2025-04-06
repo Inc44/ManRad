@@ -54,7 +54,7 @@ def count_txt_data(base_path):
 
 
 def analyze_dir(dir_path):
-	img_path = os.path.join(dir_path, "img")
+	img_path = os.path.join(dir_path, "crops")
 	txt_path = os.path.join(dir_path, "json")
 	return {"gemini": count_img_data(img_path), "openai_tts": count_txt_data(txt_path)}
 
