@@ -147,7 +147,7 @@ def process_and_merge_audio(
 
 
 if __name__ == "__main__":
-	img_directory = "img"
+	img_directory = "crops"
 	wav_directory = "wav"
 	output_directory = "output"
 	use_transition = False
