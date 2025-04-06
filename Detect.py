@@ -5,6 +5,10 @@ import math
 import numpy as np
 import os
 
+DISTANCE = 32
+MARGIN = 16
+THRESHOLD = 64
+
 
 def calculate_box_distance(box1, box2):
 	min_x1 = min(p[0] for p in box1)
@@ -26,12 +30,12 @@ def calculate_box_distance(box1, box2):
 	return math.sqrt(dx**2 + dy**2)
 
 
-def find_connected_components(boxes, distance_threshold):
+def find_connected_components(boxes, distance=DISTANCE):
 	n = len(boxes)
 	graph = [[] for _ in range(n)]
 	for i in range(n):
 		for j in range(i + 1, n):
-			if calculate_box_distance(boxes[i], boxes[j]) <= distance_threshold:
+			if calculate_box_distance(boxes[i], boxes[j]) <= distance:
 				graph[i].append(j)
 				graph[j].append(i)
 	visited = [False] * n
@@ -52,7 +56,7 @@ def find_connected_components(boxes, distance_threshold):
 	return groups
 
 
-def calculate_group_boxes(boxes, groups, margin=16):
+def calculate_group_boxes(boxes, groups, margin=MARGIN):
 	group_boxes = []
 	group_centers = []
 	for group in groups:
@@ -70,7 +74,7 @@ def calculate_group_boxes(boxes, groups, margin=16):
 	return group_boxes, group_centers
 
 
-def sort_boxes_by_topright_and_height(centers, boxes, image_width):
+def sort_boxes_by_topright_and_height(centers, boxes, image_width, threshold=THRESHOLD):
 	box_data = []
 	for i, center in enumerate(centers):
 		distance = math.sqrt((image_width - center[0]) ** 2 + center[1] ** 2)
@@ -126,7 +130,7 @@ def crop_and_save_boxes(image, boxes, sorted_indices, output_dir, filename_base)
 
 
 def calculate_height_deltas(
-	group_centers, grouped_boxes, sorted_indices, image_height, threshold=100
+	group_centers, grouped_boxes, sorted_indices, image_height, threshold=THRESHOLD
 ):
 	sorted_top_heights = [grouped_boxes[idx][1] for idx in sorted_indices]
 	if not sorted_top_heights:
