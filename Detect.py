@@ -169,8 +169,7 @@ def process_images_with_ocr():
 	ocr_engine = PaddleOCR(
 		use_gpu=True,
 		gpu_mem=1337,
-		det_db_box_thresh=0.69,
-		show_log=True,
+		show_log=False,
 		layout=False,
 		table=False,
 		ocr=False,
