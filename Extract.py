@@ -13,12 +13,14 @@ MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
 LANGUAGE = "Russian"
 PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any introductory phrases or additional commentary. If no readable text is found, the text content is empty. Return JSON: [{{"text": "text content"}}, ...]'
 ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
-RETRY = 2
-WAIT = 60
+RETRY = 3
+WAIT = 6
 CONCURRENT = 150
+BASE_TEMPERATURE = 0.0
+TEMPERATURE_INCREASE = 0.1
 
 
-def extract_text(img_path, retry=RETRY, wait=WAIT):
+def extract_text(img_path, temperature=BASE_TEMPERATURE, retry=RETRY, wait=WAIT):
 	with open(img_path, "rb") as f:
 		b64 = base64.b64encode(f.read()).decode("utf-8")
 	headers = {
@@ -42,7 +44,7 @@ def extract_text(img_path, retry=RETRY, wait=WAIT):
 				],
 			}
 		],
-		"temperature": 0,
+		"temperature": temperature,
 		"max_tokens": 2000,
 	}
 	for attempt in range(retry):
@@ -90,9 +92,10 @@ def process_image(img_path, img_dir, json_dir):
 	os.makedirs(json_path.parent, exist_ok=True)
 	if verify_json_file(str(json_path)):
 		return {"image": str(img_path), "json": str(json_path)}
-	max_attempts = 3
-	for _ in range(max_attempts):
-		text_data = extract_text(str(img_path))
+	max_attempts = RETRY
+	current_temperature = BASE_TEMPERATURE
+	for attempt in range(max_attempts):
+		text_data = extract_text(str(img_path), temperature=current_temperature)
 		if text_data and isinstance(text_data, list):
 			if text_data and "box_2d" in text_data[0]:
 				text_data.sort(key=lambda x: (x["box_2d"][0], -x["box_2d"][1]))
@@ -102,11 +105,14 @@ def process_image(img_path, img_dir, json_dir):
 				return {
 					"image": str(img_path),
 					"json": str(json_path),
+					"temperature": current_temperature,
 				}
+		current_temperature += TEMPERATURE_INCREASE
 	return {
 		"image": str(img_path),
 		"json": str(json_path),
 		"error": "Processing failed",
+		"max_temperature_tried": current_temperature - TEMPERATURE_INCREASE,
 	}
 
 
