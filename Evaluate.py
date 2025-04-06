@@ -36,8 +36,12 @@ def count_txt_data(base_path):
 	file_count = len(json_files)
 	texts = []
 	for json_path in json_files:
-		with open(json_path, "r") as f:
-			data = json.load(f)
+		try:
+			with open(json_path, "r", encoding="utf-8") as f:
+				data = json.load(f)
+		except json.JSONDecodeError:
+			print(f"Skipping {json_path}")
+			continue
 		for item in data:
 			if isinstance(item, dict) and "text" in item and item["text"] is not None:
 				texts.append(item["text"])
