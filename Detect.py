@@ -226,7 +226,7 @@ def process_images_with_ocr():
 		[crops_dir, annotated_small_dir, annotated_grouped_dir, delta_dir]
 	)
 	filenames = [f for f in os.listdir(image_dir) if f.lower().endswith(".jpg")]
-	with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+	with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
 		futures = [
 			executor.submit(
 				process_single_image,
