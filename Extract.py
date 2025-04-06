@@ -1,12 +1,13 @@
 from pathlib import Path
 import base64
-import concurrent.futures
 import json
 import os
-import re
+import random
+import regex
 import requests
 import sys
 import time
+import threading
 
 KEY = os.environ.get("DEEPINFRA_API_KEY")
 MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
@@ -18,6 +19,26 @@ WAIT = 6
 CONCURRENT = 150
 BASE_TEMPERATURE = 0.0
 TEMPERATURE_INCREASE = 0.1
+file_list_lock = threading.Lock()
+
+
+def sanitize_json_string(json_str):
+	fixed = regex.sub(r"\\u[^0-9a-fA-F]{4}", "", json_str)
+	fixed = regex.sub(r"[\x00-\x1F\x7F]", "", fixed)
+	return fixed
+
+
+def safe_json_loads(json_str):
+	try:
+		return json.loads(json_str)
+	except json.JSONDecodeError:
+		try:
+			sanitized = sanitize_json_string(json_str)
+			return json.loads(sanitized)
+		except json.JSONDecodeError:
+			if '"text"' in json_str:
+				return [{"text": ""}]
+			return []
 
 
 def extract_text(img_path, temperature=BASE_TEMPERATURE, retry=RETRY, wait=WAIT):
@@ -48,30 +69,33 @@ def extract_text(img_path, temperature=BASE_TEMPERATURE, retry=RETRY, wait=WAIT)
 		"max_tokens": 2000,
 	}
 	for attempt in range(retry):
-		resp = requests.post(
-			ENDPOINT,
-			headers=headers,
-			json=payload,
-		)
-		if resp.status_code != 200:
+		try:
+			resp = requests.post(
+				ENDPOINT,
+				headers=headers,
+				json=payload,
+			)
+			if resp.status_code != 200:
+				if attempt < retry - 1:
+					time.sleep(wait)
+				continue
+			data = resp.json()
+			if "choices" in data and data["choices"]:
+				content = data["choices"][0]["message"]["content"]
+				start = content.find("[")
+				end = content.rfind("]") + 1
+				if start >= 0 and end > start:
+					json_str = content[start:end]
+					result = safe_json_loads(json_str)
+					if (
+						result
+						and isinstance(result, list)
+						and all(isinstance(item, dict) for item in result)
+					):
+						return result
+		except Exception:
 			if attempt < retry - 1:
 				time.sleep(wait)
-			continue
-		data = resp.json()
-		if "choices" in data and data["choices"]:
-			content = data["choices"][0]["message"]["content"]
-			start = content.find("[")
-			end = content.rfind("]") + 1
-			if start >= 0 and end > start:
-				json_str = content[start:end]
-				json_str = re.sub(r"[\x00-\x1F\x7F]", "", json_str)
-				result = json.loads(json_str)
-				if (
-					result
-					and isinstance(result, list)
-					and all(isinstance(item, dict) for item in result)
-				):
-					return result
 	return []
 
 
@@ -81,9 +105,39 @@ def verify_json_file(json_path, min_size=26):
 	file_size = os.path.getsize(json_path)
 	if file_size < min_size:
 		return False
-	with open(json_path, "r", encoding="utf-8") as f:
-		data = json.load(f)
-	return isinstance(data, list) and len(data) > 0
+	try:
+		with open(json_path, "r", encoding="utf-8") as f:
+			data = json.load(f)
+		return isinstance(data, list) and len(data) > 0
+	except Exception:
+		return False
+
+
+def get_next_file(pending_files):
+	with file_list_lock:
+		if not pending_files:
+			return None
+		file_index = random.randint(0, len(pending_files) - 1)
+		file_path = pending_files.pop(file_index)
+		return file_path
+
+
+def worker(img_dir, json_dir, pending_files, results):
+	while True:
+		img_path = get_next_file(pending_files)
+		if img_path is None:
+			break
+		try:
+			result = process_image(img_path, img_dir, json_dir)
+			with file_list_lock:
+				results.append(result)
+		except Exception as e:
+			error_result = {
+				"image": str(img_path),
+				"error": f"Processing error: {str(e)}",
+			}
+			with file_list_lock:
+				results.append(error_result)
 
 
 def process_image(img_path, img_dir, json_dir):
@@ -97,16 +151,19 @@ def process_image(img_path, img_dir, json_dir):
 	for attempt in range(max_attempts):
 		text_data = extract_text(str(img_path), temperature=current_temperature)
 		if text_data and isinstance(text_data, list):
-			if text_data and "box_2d" in text_data[0]:
-				text_data.sort(key=lambda x: (x["box_2d"][0], -x["box_2d"][1]))
-			with open(json_path, "w", encoding="utf-8") as f:
-				json.dump(text_data, f, indent="\t", ensure_ascii=False)
-			if verify_json_file(str(json_path)):
-				return {
-					"image": str(img_path),
-					"json": str(json_path),
-					"temperature": current_temperature,
-				}
+			try:
+				if text_data and len(text_data) > 0 and text_data[0].get("box_2d"):
+					text_data.sort(key=lambda x: (x["box_2d"][0], -x["box_2d"][1]))
+				with open(json_path, "w", encoding="utf-8") as f:
+					json.dump(text_data, f, indent="\t", ensure_ascii=False)
+				if verify_json_file(str(json_path)):
+					return {
+						"image": str(img_path),
+						"json": str(json_path),
+						"temperature": current_temperature,
+					}
+			except Exception:
+				pass
 		current_temperature += TEMPERATURE_INCREASE
 	return {
 		"image": str(img_path),
@@ -128,16 +185,17 @@ def process_dir(base_dir, max_workers=CONCURRENT):
 	for ext in exts:
 		img_files.extend(img_dir.glob(f"**/*{ext}"))
 		img_files.extend(img_dir.glob(f"**/*{ext.upper()}"))
-	img_files = sorted(img_files)
+	pending_files = sorted(img_files)
 	results = []
-	with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-		future_to_img = {
-			executor.submit(process_image, img_path, img_dir, json_dir): img_path
-			for img_path in img_files
-		}
-		for _, future in enumerate(concurrent.futures.as_completed(future_to_img)):
-			result = future.result()
-			results.append(result)
+	threads = []
+	for _ in range(min(max_workers, len(pending_files))):
+		thread = threading.Thread(
+			target=worker, args=(img_dir, json_dir, pending_files, results)
+		)
+		thread.start()
+		threads.append(thread)
+	for thread in threads:
+		thread.join()
 	return sorted(results, key=lambda x: x.get("image", ""))
 
 
