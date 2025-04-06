@@ -13,9 +13,12 @@ MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
 LANGUAGE = "Russian"
 PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any introductory phrases or additional commentary. If no readable text is found, the text content is empty. Return JSON: [{{"text": "text content"}}, ...]'
 ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
+RETRY = 2
+WAIT = 60
+CONCURRENT = 150
 
 
-def extract_text(img_path, retry=10, wait=10.0):
+def extract_text(img_path, retry=RETRY, wait=WAIT):
 	with open(img_path, "rb") as f:
 		b64 = base64.b64encode(f.read()).decode("utf-8")
 	headers = {
@@ -107,7 +110,7 @@ def process_image(img_path, img_dir, json_dir):
 	}
 
 
-def process_dir(base_dir, max_workers=10):
+def process_dir(base_dir, max_workers=CONCURRENT):
 	base_dir = Path(base_dir)
 	img_dir = base_dir / "crops"
 	json_dir = base_dir / "json"
@@ -132,7 +135,7 @@ def process_dir(base_dir, max_workers=10):
 	return sorted(results, key=lambda x: x.get("image", ""))
 
 
-def main(path, max_workers=10):
+def main(path, max_workers=CONCURRENT):
 	results = process_dir(path, max_workers)
 	summary_path = os.path.join(path, "extract_summary.json")
 	with open(summary_path, "w", encoding="utf-8") as f:
