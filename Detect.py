@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw
 from paddleocr import PaddleOCR, draw_ocr
+import json
 import math
 import numpy as np
 import os
@@ -120,19 +121,58 @@ def crop_and_save_boxes(image, boxes, sorted_indices, output_dir, filename_base)
 		max_x = min(image.width, int(max_x))
 		max_y = min(image.height, int(max_y))
 		crop = image.crop((min_x, min_y, max_x, max_y))
-		crop_path = os.path.join(output_dir, f"{filename_base}_crop_{i+1}.jpg")
-		crop.save(crop_path)
+		crop_path = os.path.join(output_dir, f"{filename_base}{i+1}.jpg")
+		crop.save(crop_path, quality=100)
+
+
+def calculate_height_deltas(
+	group_centers, grouped_boxes, sorted_indices, image_height, threshold=100
+):
+	sorted_top_heights = [grouped_boxes[idx][1] for idx in sorted_indices]
+	if not sorted_top_heights:
+		return [image_height]
+	num_groups = len(sorted_top_heights)
+	deltas = [0] * num_groups
+	deltas[0] = sorted_top_heights[0]
+	for i in range(1, num_groups - 1):
+		deltas[i] = sorted_top_heights[i] - sorted_top_heights[i - 1]
+	if num_groups > 1:
+		deltas[-1] = image_height - sorted_top_heights[-1]
+	remainder = 0
+	for i in range(num_groups):
+		deltas[i] += remainder
+		remainder = 0
+		if deltas[i] < threshold:
+			remainder = deltas[i]
+			deltas[i] = 0
+	if remainder > 0 and num_groups > 0:
+		deltas[-1] += remainder
+	deltas = [max(0, d) for d in deltas]
+	current_sum = sum(deltas)
+	if current_sum != image_height and num_groups > 0:
+		deltas[-1] += image_height - current_sum
+	return deltas
+
+
+def save_deltas_to_json(deltas, output_dir, filename_base):
+	os.makedirs(output_dir, exist_ok=True)
+	output_file_path = os.path.join(output_dir, f"{filename_base}.json")
+	with open(output_file_path, "w") as json_file:
+		json.dump(deltas, json_file, indent="\t", ensure_ascii=False)
 
 
 def process_images_with_ocr():
 	ocr_engine = PaddleOCR(lang="en")
 	image_dir = "img"
 	crops_dir = "crops"
-	annotated_small_dir = "annotated_small"
+	annotated_small_dir = "annotated"
 	annotated_grouped_dir = "annotated_grouped"
-	create_required_directories([crops_dir, annotated_small_dir, annotated_grouped_dir])
+	delta_dir = "delta"
+	create_required_directories(
+		[crops_dir, annotated_small_dir, annotated_grouped_dir, delta_dir]
+	)
 	for filename in os.listdir(image_dir):
-		if not filename.lower().endswith((".jpg", ".jpeg", ".png")):
+		if not filename.lower().endswith((".jpg")):
 			continue
 		image_path = os.path.join(image_dir, filename)
 		ocr_results = ocr_engine.ocr(image_path, rec=False)
@@ -154,6 +194,10 @@ def process_images_with_ocr():
 		grouped_boxes_image.save(grouped_annotated_path)
 		root, _ = os.path.splitext(filename)
 		crop_and_save_boxes(image, grouped_boxes, sorted_indices, crops_dir, root)
+		height_deltas = calculate_height_deltas(
+			group_centers, grouped_boxes, sorted_indices, image.height
+		)
+		save_deltas_to_json(height_deltas, delta_dir, root)
 
 
 if __name__ == "__main__":
