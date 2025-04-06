@@ -2,11 +2,13 @@
 ```
 setx /M OPENAI_API_KEY ""
 setx /M GEMINI_API_KEY ""
+setx /M DEEPINFRA_API_KEY ""
 ```
 
 ```
 echo %OPENAI_API_KEY%
 echo %GEMINI_API_KEY%
+echo %DEEPINFRA_API_KEY%
 ```
 
 ```

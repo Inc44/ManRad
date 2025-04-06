@@ -8,12 +8,13 @@ import requests
 import sys
 import time
 
-KEY = os.environ.get("GEMINI_API_KEY")
+KEY = os.environ.get("DEEPINFRA_API_KEY")
+MODEL = "google/gemma-3-27b-it"
 LANGUAGE = "Russian"
 PROMPT = f"""Provide the result ONLY, without any introductory phrases or additional commentary in {LANGUAGE}
 Proofread this text but only fix grammar
 Return JSON: [{{"text": "text content"}}, ...]"""
-ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 
 
 def extract_text(img_path, retry=10, wait=10.0):
@@ -24,7 +25,7 @@ def extract_text(img_path, retry=10, wait=10.0):
 		"Authorization": f"Bearer {KEY}",
 	}
 	payload = {
-		"model": "google/gemma-3-27b-it",
+		"model": MODEL,
 		"messages": [
 			{
 				"role": "user",
