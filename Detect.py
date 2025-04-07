@@ -163,8 +163,9 @@ def calculate_height_deltas(
 def save_deltas_to_json(deltas, output_dir, filename_base):
 	os.makedirs(output_dir, exist_ok=True)
 	output_file_path = os.path.join(output_dir, f"{filename_base}.json")
+	delta_dict = {filename_base: deltas}
 	with open(output_file_path, "w") as json_file:
-		json.dump(deltas, json_file, indent="\t", ensure_ascii=False)
+		json.dump(delta_dict, json_file, indent="\t", ensure_ascii=False)
 
 
 def process_single_image(
@@ -226,29 +227,16 @@ def process_images_with_ocr():
 		[crops_dir, annotated_small_dir, annotated_grouped_dir, delta_dir]
 	)
 	filenames = [f for f in os.listdir(image_dir) if f.lower().endswith(".jpg")]
-	with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-		futures = [
-			executor.submit(
-				process_single_image,
-				filename,
-				ocr_engine,
-				image_dir,
-				crops_dir,
-				annotated_small_dir,
-				annotated_grouped_dir,
-				delta_dir,
-			)
-			for filename in filenames
-		]
-		for future in tqdm(
-			concurrent.futures.as_completed(futures),
-			total=len(futures),
-			desc="Processing images",
-		):
-			try:
-				filename = future.result()
-			except Exception as exc:
-				print(f"Image processing generated an exception: {exc}")
+	for filename in tqdm(filenames, desc="Processing images"):
+		process_single_image(
+			filename,
+			ocr_engine,
+			image_dir,
+			crops_dir,
+			annotated_small_dir,
+			annotated_grouped_dir,
+			delta_dir,
+		)
 
 
 if __name__ == "__main__":
