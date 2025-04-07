@@ -1,26 +1,27 @@
 from PIL import Image, ImageDraw
 from paddleocr import PaddleOCR, draw_ocr
-import concurrent.futures
+import multiprocessing
 import json
 import math
 import numpy as np
 import os
-from tqdm import tqdm
 
-DISTANCE = 32
-MARGIN = 16
-THRESHOLD = 96
+DISTANCE_LIMIT = 32
+BOX_PADDING = 16
+HEIGHT_LIMIT = 96
 
 
-def calculate_box_distance(box1, box2):
-	min_x1 = min(p[0] for p in box1)
-	min_y1 = min(p[1] for p in box1)
-	max_x1 = max(p[0] for p in box1)
-	max_y1 = max(p[1] for p in box1)
-	min_x2 = min(p[0] for p in box2)
-	min_y2 = min(p[1] for p in box2)
-	max_x2 = max(p[0] for p in box2)
-	max_y2 = max(p[1] for p in box2)
+def get_box_boundaries(box):
+	min_x = min(p[0] for p in box)
+	min_y = min(p[1] for p in box)
+	max_x = max(p[0] for p in box)
+	max_y = max(p[1] for p in box)
+	return min_x, min_y, max_x, max_y
+
+
+def measure_box_distance(box1, box2):
+	min_x1, min_y1, max_x1, max_y1 = get_box_boundaries(box1)
+	min_x2, min_y2, max_x2, max_y2 = get_box_boundaries(box2)
 	if min_x1 <= max_x2 and min_x2 <= max_x1:
 		dx = 0
 	else:
@@ -32,34 +33,36 @@ def calculate_box_distance(box1, box2):
 	return math.sqrt(dx**2 + dy**2)
 
 
-def find_connected_components(boxes, distance=DISTANCE):
-	n = len(boxes)
-	graph = [[] for _ in range(n)]
-	for i in range(n):
-		for j in range(i + 1, n):
-			if calculate_box_distance(boxes[i], boxes[j]) <= distance:
-				graph[i].append(j)
-				graph[j].append(i)
-	visited = [False] * n
+def group_adjacent_boxes(boxes, max_distance=DISTANCE_LIMIT):
+	box_count = len(boxes)
+	if box_count == 0:
+		return []
+	links = [[] for _ in range(box_count)]
+	for i in range(box_count):
+		for j in range(i + 1, box_count):
+			if measure_box_distance(boxes[i], boxes[j]) <= max_distance:
+				links[i].append(j)
+				links[j].append(i)
+	visited = [False] * box_count
 	groups = []
 
-	def depth_first_search(node, component):
+	def collect_connected(node, current_group):
 		visited[node] = True
-		component.append(node)
-		for neighbor in graph[node]:
+		current_group.append(node)
+		for neighbor in links[node]:
 			if not visited[neighbor]:
-				depth_first_search(neighbor, component)
+				collect_connected(neighbor, current_group)
 
-	for i in range(n):
+	for i in range(box_count):
 		if not visited[i]:
 			current_group = []
-			depth_first_search(i, current_group)
+			collect_connected(i, current_group)
 			groups.append(current_group)
 	return groups
 
 
-def calculate_group_boxes(boxes, groups, margin=MARGIN):
-	group_boxes = []
+def compute_group_bounds_and_centers(boxes, groups, margin=BOX_PADDING):
+	group_bounds = []
 	group_centers = []
 	for group in groups:
 		all_points = []
@@ -69,149 +72,111 @@ def calculate_group_boxes(boxes, groups, margin=MARGIN):
 		min_y = min(point[1] for point in all_points) - margin
 		max_x = max(point[0] for point in all_points) + margin
 		max_y = max(point[1] for point in all_points) + margin
-		group_boxes.append((min_x, min_y, max_x, max_y))
+		group_bounds.append((min_x, min_y, max_x, max_y))
 		center_x = (min_x + max_x) / 2
 		center_y = (min_y + max_y) / 2
 		group_centers.append((center_x, center_y))
-	return group_boxes, group_centers
+	return group_bounds, group_centers
 
 
-def sort_boxes_by_topright_and_height(centers, boxes, image_width, threshold=THRESHOLD):
-	box_data = []
+def order_boxes_by_position(centers, bounds, image_width):
+	if not centers:
+		return []
+	box_metrics = []
 	for i, center in enumerate(centers):
-		distance = math.sqrt((image_width - center[0]) ** 2 + center[1] ** 2)
-		height_value = boxes[i][1]
-		box_data.append((i, distance, height_value))
-	result = []
-	box_data.sort(key=lambda x: x[1])
-	first_idx = box_data[0][0]
-	result.append(first_idx)
-	prev_y = boxes[first_idx][1]
-	remaining_boxes = box_data[1:]
-	while remaining_boxes:
-		height_distance_scores = []
-		for idx, dist, y_min in remaining_boxes:
-			height_diff = abs(y_min - prev_y)
+		corner_distance = math.sqrt((image_width - center[0]) ** 2 + center[1] ** 2)
+		top_position = bounds[i][1]
+		box_metrics.append((i, corner_distance, top_position))
+	box_metrics.sort(key=lambda x: x[1])
+	ordered_indices = [box_metrics[0][0]]
+	last_y = bounds[box_metrics[0][0]][1]
+	remaining = box_metrics[1:]
+	while remaining:
+		scores = []
+		for idx, dist, y_pos in remaining:
+			height_diff = abs(y_pos - last_y)
 			combined_score = (height_diff * 3) + dist
-			height_distance_scores.append((idx, combined_score))
-		height_distance_scores.sort(key=lambda x: x[1])
-		next_idx = height_distance_scores[0][0]
-		result.append(next_idx)
-		prev_y = boxes[next_idx][1]
-		remaining_boxes = [(i, d, y) for i, d, y in remaining_boxes if i != next_idx]
-	return result
+			scores.append((idx, combined_score))
+		scores.sort(key=lambda x: x[1])
+		next_box = scores[0][0]
+		ordered_indices.append(next_box)
+		last_y = bounds[next_box][1]
+		remaining = [(i, d, y) for i, d, y in remaining if i != next_box]
+	return ordered_indices
 
 
-def create_required_directories(dir_list):
-	for directory in dir_list:
+def create_directories(directory_list):
+	for directory in directory_list:
 		os.makedirs(directory, exist_ok=True)
 
 
-def draw_grouped_boxes(image, boxes, sorted_indices, line_width=2):
-	result_image = image.copy()
-	draw = ImageDraw.Draw(result_image)
-	for i, idx in enumerate(sorted_indices):
-		min_x, min_y, max_x, max_y = boxes[idx]
+def draw_numbered_boxes(image, bounds, order, line_width=2):
+	result = image.copy()
+	draw = ImageDraw.Draw(result)
+	for number, box_idx in enumerate(order):
+		x_min, y_min, x_max, y_max = bounds[box_idx]
 		draw.rectangle(
-			[(min_x, min_y), (max_x, max_y)], outline="red", width=line_width
+			[(x_min, y_min), (x_max, y_max)], outline="red", width=line_width
 		)
-		draw.text((min_x + 5, min_y + 5), str(i + 1), fill="red")
-	return result_image
+		draw.text((x_min + 5, y_min + 5), str(number + 1), fill="red")
+	return result
 
 
-def crop_and_save_boxes(image, boxes, sorted_indices, output_dir, filename_base):
-	for i, box_idx in enumerate(sorted_indices):
-		min_x, min_y, max_x, max_y = boxes[box_idx]
-		min_x = max(0, int(min_x))
-		min_y = max(0, int(min_y))
-		max_x = min(image.width, int(max_x))
-		max_y = min(image.height, int(max_y))
-		crop = image.crop((min_x, min_y, max_x, max_y))
-		crop_path = os.path.join(output_dir, f"{filename_base}{i+1:03d}.jpg")
+def extract_and_save_regions(image, bounds, order, output_folder, base_name):
+	for i, box_idx in enumerate(order):
+		x_min, y_min, x_max, y_max = bounds[box_idx]
+		x_min = max(0, int(x_min))
+		y_min = max(0, int(y_min))
+		x_max = min(image.width, int(x_max))
+		y_max = min(image.height, int(y_max))
+		crop = image.crop((x_min, y_min, x_max, y_max))
+		crop_filename = f"{base_name}{i+1:03d}.jpg"
+		crop_path = os.path.join(output_folder, crop_filename)
 		crop.save(crop_path, quality=100)
 
 
-def calculate_height_deltas(
-	group_centers, grouped_boxes, sorted_indices, image_height, threshold=THRESHOLD
-):
-	sorted_top_heights = [grouped_boxes[idx][1] for idx in sorted_indices]
-	if not sorted_top_heights:
+def calculate_vertical_gaps(bounds, order, image_height):
+	if not order:
 		return [image_height]
-	num_groups = len(sorted_top_heights)
-	deltas = [0] * num_groups
-	deltas[0] = sorted_top_heights[0]
-	for i in range(1, num_groups - 1):
-		deltas[i] = sorted_top_heights[i] - sorted_top_heights[i - 1]
-	if num_groups > 1:
-		deltas[-1] = image_height - sorted_top_heights[-1]
-	remainder = 0
-	for i in range(num_groups):
-		deltas[i] += remainder
-		remainder = 0
-		if deltas[i] < threshold:
-			remainder = deltas[i]
-			deltas[i] = 0
-	if remainder > 0 and num_groups > 0:
-		deltas[-1] += remainder
-	deltas = [max(0, d) for d in deltas]
-	current_sum = sum(deltas)
-	if current_sum != image_height and num_groups > 0:
-		deltas[-1] += image_height - current_sum
-	return deltas
+	top_positions = [bounds[idx][1] for idx in order]
+	count = len(top_positions)
+	gaps = [0] * count
+	gaps[0] = top_positions[0]
+	for i in range(1, count):
+		gaps[i] = top_positions[i] - top_positions[i - 1]
+	if count > 0:
+		gaps[-1] = image_height - top_positions[-1]
+	carry = 0
+	for i in range(count):
+		gaps[i] += carry
+		carry = 0
+		if gaps[i] < HEIGHT_LIMIT:
+			carry = gaps[i]
+			gaps[i] = 0
+	if carry > 0 and count > 0:
+		gaps[-1] += carry
+	gaps = [max(0, gap) for gap in gaps]
+	total = sum(gaps)
+	if total != image_height and count > 0:
+		gaps[-1] += image_height - total
+	return gaps
 
 
-def save_deltas_to_json(deltas, output_dir, filename_base):
-	os.makedirs(output_dir, exist_ok=True)
-	output_file_path = os.path.join(output_dir, f"{filename_base}.json")
-	delta_dict = {}
-	for i, delta in enumerate(deltas):
-		crop_filename = f"{filename_base}{i+1:03d}"
-		delta_dict[crop_filename] = delta
-	with open(output_file_path, "w") as json_file:
-		json.dump(delta_dict, json_file, indent="\t", ensure_ascii=False)
+def store_gap_data(gaps, output_folder, base_name):
+	os.makedirs(output_folder, exist_ok=True)
+	json_path = os.path.join(output_folder, f"{base_name}.json")
+	data = {}
+	for i, gap in enumerate(gaps):
+		crop_key = f"{base_name}{i+1:03d}"
+		data[crop_key] = gap
+	with open(json_path, "w") as json_file:
+		json.dump(data, json_file, indent="\t", ensure_ascii=False)
 
 
-def process_single_image(
-	filename,
-	ocr_engine,
-	image_dir,
-	crops_dir,
-	annotated_small_dir,
-	annotated_grouped_dir,
-	delta_dir,
-):
-	if not filename.lower().endswith((".jpg")):
-		return
-	image_path = os.path.join(image_dir, filename)
-	ocr_results = ocr_engine.ocr(image_path, rec=False)
-	if not ocr_results or len(ocr_results) == 0 or not ocr_results[0]:
-		return
-	ocr_result = ocr_results[0]
-	image = Image.open(image_path).convert("RGB")
-	small_boxes_image = draw_ocr(np.array(image), ocr_result)
-	small_boxes_image = Image.fromarray(small_boxes_image)
-	small_annotated_path = os.path.join(annotated_small_dir, filename)
-	small_boxes_image.save(small_annotated_path)
-	groups = find_connected_components(ocr_result)
-	grouped_boxes, group_centers = calculate_group_boxes(ocr_result, groups)
-	sorted_indices = sort_boxes_by_topright_and_height(
-		group_centers, grouped_boxes, image.width
-	)
-	grouped_boxes_image = draw_grouped_boxes(image, grouped_boxes, sorted_indices)
-	grouped_annotated_path = os.path.join(annotated_grouped_dir, filename)
-	grouped_boxes_image.save(grouped_annotated_path)
-	root, _ = os.path.splitext(filename)
-	crop_and_save_boxes(image, grouped_boxes, sorted_indices, crops_dir, root)
-	height_deltas = calculate_height_deltas(
-		group_centers, grouped_boxes, sorted_indices, image.height
-	)
-	save_deltas_to_json(height_deltas, delta_dir, root)
-	return filename
-
-
-def process_images_with_ocr():
-	ocr_engine = PaddleOCR(
-		gpu_mem=4000,
+def initialize_ocr_engine():
+	return PaddleOCR(
+		gpu_id=0,
+		gpu_mem=1024,
 		lang="en",
 		layout=False,
 		ocr=False,
@@ -221,26 +186,97 @@ def process_images_with_ocr():
 		use_angle_cls=True,
 		use_gpu=True,
 	)
-	image_dir = "img"
-	crops_dir = "crops"
-	annotated_small_dir = "annotated"
-	annotated_grouped_dir = "annotated_grouped"
-	delta_dir = "delta"
-	create_required_directories(
-		[crops_dir, annotated_small_dir, annotated_grouped_dir, delta_dir]
+
+
+def process_single_image(image_path, base_name, folders, ocr_engine):
+	ocr_result = ocr_engine.ocr(image_path, rec=False)
+	if not ocr_result or len(ocr_result) == 0 or not ocr_result[0]:
+		return False
+	text_boxes = ocr_result[0]
+	image = Image.open(image_path).convert("RGB")
+	small_boxes_image = draw_ocr(np.array(image), text_boxes)
+	small_boxes_image = Image.fromarray(small_boxes_image)
+	small_boxes_path = os.path.join(
+		folders["annotated_small"], os.path.basename(image_path)
 	)
-	filenames = [f for f in os.listdir(image_dir) if f.lower().endswith(".jpg")]
-	for filename in tqdm(filenames, desc="Processing images"):
-		process_single_image(
-			filename,
-			ocr_engine,
-			image_dir,
-			crops_dir,
-			annotated_small_dir,
-			annotated_grouped_dir,
-			delta_dir,
-		)
+	small_boxes_image.save(small_boxes_path)
+	box_groups = group_adjacent_boxes(text_boxes)
+	group_bounds, group_centers = compute_group_bounds_and_centers(
+		text_boxes, box_groups
+	)
+	box_order = order_boxes_by_position(group_centers, group_bounds, image.width)
+	grouped_boxes_image = draw_numbered_boxes(image, group_bounds, box_order)
+	grouped_boxes_path = os.path.join(
+		folders["annotated_grouped"], os.path.basename(image_path)
+	)
+	grouped_boxes_image.save(grouped_boxes_path)
+	extract_and_save_regions(
+		image, group_bounds, box_order, folders["crops"], base_name
+	)
+	vertical_gaps = calculate_vertical_gaps(group_bounds, box_order, image.height)
+	store_gap_data(vertical_gaps, folders["deltas"], base_name)
+	return True
+
+
+def process_image_batch(file_batch, folders):
+	ocr_engine = initialize_ocr_engine()
+	processed = []
+	for filename in file_batch:
+		if not filename.lower().endswith(".jpg"):
+			continue
+		image_path = os.path.join(folders["images"], filename)
+		base_name, _ = os.path.splitext(filename)
+		success = process_single_image(image_path, base_name, folders, ocr_engine)
+		if success:
+			processed.append(filename)
+	return processed
+
+
+def distribute_files_to_workers(files, num_workers):
+	batches = [[] for _ in range(num_workers)]
+	for i, filename in enumerate(files):
+		worker_idx = i % num_workers
+		batches[worker_idx].append(filename)
+	return batches
+
+
+def run_ocr_processing():
+	folders = {
+		"images": "img",
+		"crops": "crops",
+		"annotated_small": "annotated",
+		"annotated_grouped": "annotated_grouped",
+		"deltas": "delta",
+	}
+	create_directories(
+		[
+			folders["crops"],
+			folders["annotated_small"],
+			folders["annotated_grouped"],
+			folders["deltas"],
+		]
+	)
+	jpg_files = [f for f in os.listdir(folders["images"]) if f.lower().endswith(".jpg")]
+	jpg_files.sort()
+	available_cores = multiprocessing.cpu_count()
+	optimal_workers = min(6, available_cores)
+	results = []
+	if len(jpg_files) <= optimal_workers:
+		results = process_image_batch(jpg_files, folders)
+	else:
+		file_batches = distribute_files_to_workers(jpg_files, optimal_workers)
+		with multiprocessing.Pool(processes=optimal_workers) as pool:
+			tasks = []
+			for batch in file_batches:
+				if batch:
+					task = pool.apply_async(process_image_batch, (batch, folders))
+					tasks.append(task)
+			for task in tasks:
+				batch_results = task.get()
+				results.extend(batch_results)
+	return len(results)
 
 
 if __name__ == "__main__":
-	process_images_with_ocr()
+	multiprocessing.freeze_support()
+	run_ocr_processing()
