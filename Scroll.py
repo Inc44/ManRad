@@ -6,76 +6,52 @@ import os
 import subprocess
 
 
-def get_files_with_extension(directory, extension):
-	return sorted([f for f in os.listdir(directory) if f.lower().endswith(extension)])
-
-
-def get_image_paths(directory):
-	return get_files_with_extension(directory, ".jpg")
-
-
-def get_json_paths(directory):
-	return get_files_with_extension(directory, ".json")
-
-
-def combine_images(img_dir):
-	image_paths = get_image_paths(img_dir)
-	first_image = Image.open(os.path.join(img_dir, image_paths[0]))
-	width, _ = first_image.size
-	first_image.close()
-	images = []
+def combine_images(image_dir):
+	image_files = sorted(
+		[f for f in os.listdir(image_dir) if f.lower().endswith(".jpg")]
+	)
+	if not image_files:
+		return None, 0
+	with Image.open(os.path.join(image_dir, image_files[0])) as first_image:
+		width = first_image.size[0]
 	total_height = 0
-	for img_path in image_paths:
-		img = Image.open(os.path.join(img_dir, img_path))
-		images.append(img)
-		total_height += img.size[1]
-	combined_image = Image.new("RGB", (width, total_height))
-	current_y = 0
+	images = []
+	for image_file in image_files:
+		with Image.open(os.path.join(image_dir, image_file)) as img:
+			images.append(img.copy())
+			total_height += img.size[1]
+	combined = Image.new("RGB", (width, total_height))
+	y_offset = 0
 	for img in images:
-		combined_image.paste(img, (0, current_y))
-		current_y += img.size[1]
+		combined.paste(img, (0, y_offset))
+		y_offset += img.size[1]
 		img.close()
-	return combined_image, width
+	return combined, width
 
 
-def load_all_delta_data(delta_dir):
-	delta_paths = get_json_paths(delta_dir)
+def load_deltas(delta_dir):
 	all_deltas = {}
-	for delta_path in delta_paths:
-		with open(os.path.join(delta_dir, delta_path), "r") as f:
-			deltas = json.load(f)
-			all_deltas.update(deltas)
+	for delta_file in sorted(
+		[f for f in os.listdir(delta_dir) if f.lower().endswith(".json")]
+	):
+		with open(os.path.join(delta_dir, delta_file), "r") as file:
+			delta_data = json.load(file)
+		all_deltas.update(delta_data)
 	return all_deltas
 
 
-def load_duration_data(output_dir):
-	duration_path = os.path.join(output_dir, "audio_durations.json")
-	with open(duration_path, "r") as f:
-		return json.load(f)
-
-
 @lru_cache(maxsize=2048)
-def cubic_easing(t):
-	if t < 0.5:
-		return 4 * t * t * t
-	return 1 - pow(-2 * t + 2, 3) / 2
-
-
-@lru_cache(maxsize=2048)
-def acceleration_easing(t):
+def ease(t):
 	if t < 0.4:
 		return 2.5 * t * t
 	elif t < 0.8:
 		return 0.4 + (t - 0.4) * 1.2
 	else:
-		return 0.88 + (1 - math.pow(1 - (t - 0.8) / 0.2, 2)) * 0.12
+		normalized = (t - 0.8) / 0.2
+		return 0.88 + (1 - math.pow(1 - normalized, 2)) * 0.12
 
 
-def ensure_directory_exists(dir_path):
-	os.makedirs(dir_path, exist_ok=True)
-
-
-def setup_ffmpeg_process(output_file, width, height, fps):
+def start_ffmpeg(output_file, width, height, fps):
 	cmd = [
 		"ffmpeg",
 		"-y",
@@ -111,119 +87,84 @@ def setup_ffmpeg_process(output_file, width, height, fps):
 	return subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
 
-def write_frame(image, ffmpeg_process):
-	raw_bytes = image.tobytes()
-	ffmpeg_process.stdin.write(raw_bytes)
-
-
-def add_static_frames(image, ffmpeg_process, frame_count):
-	for _ in range(frame_count):
-		write_frame(image, ffmpeg_process)
-	return frame_count
-
-
-def process_animation_segment(
-	combined_image,
-	width,
-	height,
-	start_y,
-	deltas,
-	duration,
-	ffmpeg_process,
-	frame_index,
-	fps,
+def process_segment(
+	image, width, height, start_y, deltas, duration, process, frame_idx, fps
 ):
-	segment_frame_count = round(duration * fps)
+	frame_count = round(duration * fps)
 	if not deltas or sum(deltas) == 0:
-		viewport = combined_image.crop((0, int(start_y), width, int(start_y + height)))
-		for _ in range(segment_frame_count):
-			write_frame(viewport, ffmpeg_process)
-		return frame_index + segment_frame_count, start_y
+		viewport = image.crop((0, int(start_y), width, int(start_y + height)))
+		for _ in range(frame_count):
+			process.stdin.write(viewport.tobytes())
+		return frame_idx + frame_count, start_y
 	positions = [start_y]
 	for delta in deltas:
 		positions.append(positions[-1] + delta)
-	total_movement = sum(deltas)
-	time_ratios = [delta / total_movement for delta in deltas]
-	time_markers = [0]
-	for ratio in time_ratios:
-		time_markers.append(time_markers[-1] + ratio * duration)
-	for frame in range(segment_frame_count):
-		current_time = frame / segment_frame_count * duration
-		segment_index = 0
-		while (
-			segment_index < len(time_markers) - 1
-			and current_time > time_markers[segment_index + 1]
-		):
-			segment_index += 1
-		if segment_index >= len(deltas):
-			y_position = positions[-1]
+	total_delta = sum(deltas)
+	ratios = [delta / total_delta for delta in deltas]
+	times = [0]
+	for ratio in ratios:
+		times.append(times[-1] + ratio * duration)
+	for frame in range(frame_count):
+		time = frame / frame_count * duration
+		idx = 0
+		while idx < len(times) - 1 and time > times[idx + 1]:
+			idx += 1
+		if idx >= len(deltas):
+			y_pos = positions[-1]
 		else:
-			segment_duration = (
-				time_markers[segment_index + 1] - time_markers[segment_index]
-			)
-			if segment_duration == 0:
+			segment_time = times[idx + 1] - times[idx]
+			if segment_time == 0:
 				progress = 1.0
 			else:
-				progress = (
-					current_time - time_markers[segment_index]
-				) / segment_duration
-			eased_progress = acceleration_easing(progress)
-			position_delta = positions[segment_index + 1] - positions[segment_index]
-			y_position = positions[segment_index] + eased_progress * position_delta
-		y_position = max(0, min(y_position, combined_image.height - height))
-		viewport = combined_image.crop(
-			(0, int(y_position), width, int(y_position + height))
-		)
-		write_frame(viewport, ffmpeg_process)
-	return frame_index + segment_frame_count, positions[-1]
+				progress = (time - times[idx]) / segment_time
+			eased = ease(progress)
+			delta_pos = positions[idx + 1] - positions[idx]
+			y_pos = positions[idx] + eased * delta_pos
+		y_pos = max(0, min(y_pos, image.height - height))
+		viewport = image.crop((0, int(y_pos), width, int(y_pos + height)))
+		process.stdin.write(viewport.tobytes())
+	return frame_idx + frame_count, positions[-1] if positions else start_y
 
 
-def create_scrolling_video(
-	img_dir, delta_dir, output_dir, output_file, intro_duration=0.0
-):
-	ensure_directory_exists(output_dir)
-	output_path = os.path.join(output_dir, output_file)
-	combined_image, width = combine_images(img_dir)
-	audio_to_delta = load_all_delta_data(delta_dir)
-	duration_data = load_duration_data(output_dir)
-	audio_files = sorted(audio_to_delta.keys())
+def create_video(img_dir, delta_dir, out_dir, out_file, intro_time=0.0):
+	os.makedirs(out_dir, exist_ok=True)
+	output_path = os.path.join(out_dir, out_file)
+	image, width = combine_images(img_dir)
+	if not image:
+		return 0
+	deltas = load_deltas(delta_dir)
+	with open(os.path.join(out_dir, "audio_durations.json"), "r") as file:
+		durations = json.load(file)
+	audio_files = sorted(deltas.keys())
 	fps = 60
 	height = 1350
-	ffmpeg_process = setup_ffmpeg_process(output_path, width, height, fps)
-	intro_frame_count = round(intro_duration * fps)
-	initial_viewport = combined_image.crop((0, 0, width, height))
-	current_frame = add_static_frames(
-		initial_viewport, ffmpeg_process, intro_frame_count
-	)
-	current_y = 0
-	for audio_name in audio_files:
-		delta = audio_to_delta[audio_name]
-		duration = duration_data[audio_name]
-		current_frame, current_y = process_animation_segment(
-			combined_image,
+	process = start_ffmpeg(output_path, width, height, fps)
+	current_frame = 0
+	intro_frames = round(intro_time * fps)
+	if intro_frames > 0:
+		for _ in range(intro_frames):
+			process.stdin.write(image.tobytes())
+		current_frame += intro_frames
+	y_position = 0
+	for audio in audio_files:
+		delta = deltas[audio]
+		duration = durations[audio]
+		current_frame, y_position = process_segment(
+			image,
 			width,
 			height,
-			current_y,
+			y_position,
 			[delta],
 			duration,
-			ffmpeg_process,
+			process,
 			current_frame,
 			fps,
 		)
-	ffmpeg_process.stdin.close()
-	ffmpeg_process.wait()
+	process.stdin.close()
+	process.wait()
+	image.close()
 	return current_frame
 
 
 if __name__ == "__main__":
-	img_directory = "img"
-	delta_directory = "delta"
-	output_directory = "output"
-	output_filename = "scroll.mkv"
-	create_scrolling_video(
-		img_directory,
-		delta_directory,
-		output_directory,
-		output_filename,
-		intro_duration=0.0,
-	)
+	create_video("img", "delta", "output", "scroll.mkv")
