@@ -163,7 +163,10 @@ def calculate_height_deltas(
 def save_deltas_to_json(deltas, output_dir, filename_base):
 	os.makedirs(output_dir, exist_ok=True)
 	output_file_path = os.path.join(output_dir, f"{filename_base}.json")
-	delta_dict = {filename_base: deltas}
+	delta_dict = {}
+	for i, delta in enumerate(deltas):
+		crop_filename = f"{filename_base}{i+1:03d}"
+		delta_dict[crop_filename] = delta
 	with open(output_file_path, "w") as json_file:
 		json.dump(delta_dict, json_file, indent="\t", ensure_ascii=False)
 
