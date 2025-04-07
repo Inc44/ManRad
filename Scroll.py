@@ -129,6 +129,12 @@ def process_segment(
 def create_video(img_dir, delta_dir, out_dir, out_file, intro_time=0.0):
 	os.makedirs(out_dir, exist_ok=True)
 	output_path = os.path.join(out_dir, out_file)
+	image_files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(".jpg")])
+	first_image_height = 0
+	if image_files:
+		with Image.open(os.path.join(img_dir, image_files[0])) as first_img:
+			first_image_height = first_img.size[1]
+	offset_val = -first_image_height / 2
 	image, width = combine_images(img_dir)
 	if not image:
 		return 0
@@ -139,31 +145,74 @@ def create_video(img_dir, delta_dir, out_dir, out_file, intro_time=0.0):
 	fps = 60
 	height = 1350
 	process = start_ffmpeg(output_path, width, height, fps)
-	current_frame = 0
+	frame_count = 0
 	intro_frames = round(intro_time * fps)
 	if intro_frames > 0:
+		viewport = image.crop((0, 0, width, height))
 		for _ in range(intro_frames):
-			process.stdin.write(image.tobytes())
-		current_frame += intro_frames
-	y_position = 0
+			process.stdin.write(viewport.tobytes())
+		frame_count += intro_frames
+	y_pos = 0
+	offset_remain = offset_val
 	for audio in audio_files:
 		delta = deltas[audio]
 		duration = durations[audio]
-		current_frame, y_position = process_segment(
-			image,
-			width,
-			height,
-			y_position,
-			[delta],
-			duration,
-			process,
-			current_frame,
-			fps,
-		)
+		if offset_remain < 0:
+			scroll_speed = delta / max(duration, 0.001)
+			hold_time = min(
+				duration, abs(offset_remain) / max(abs(scroll_speed), 0.001)
+			)
+			if hold_time > 0:
+				hold_frames = round(hold_time * fps)
+				top_view = image.crop((0, 0, width, height))
+				for _ in range(hold_frames):
+					process.stdin.write(top_view.tobytes())
+				frame_count += hold_frames
+				remain_time = duration - hold_time
+				if remain_time > 0:
+					reduced_delta = delta * (remain_time / duration)
+					frame_count, y_pos = process_segment(
+						image,
+						width,
+						height,
+						y_pos,
+						[reduced_delta],
+						remain_time,
+						process,
+						frame_count,
+						fps,
+					)
+				used_offset = delta * (hold_time / duration)
+				offset_remain += used_offset
+			else:
+				frame_count, y_pos = process_segment(
+					image,
+					width,
+					height,
+					y_pos,
+					[delta],
+					duration,
+					process,
+					frame_count,
+					fps,
+				)
+				offset_remain += delta
+		else:
+			frame_count, y_pos = process_segment(
+				image,
+				width,
+				height,
+				y_pos,
+				[delta],
+				duration,
+				process,
+				frame_count,
+				fps,
+			)
 	process.stdin.close()
 	process.wait()
 	image.close()
-	return current_frame
+	return frame_count
 
 
 if __name__ == "__main__":
