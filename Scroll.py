@@ -40,11 +40,11 @@ def combine_images(img_dir):
 
 def load_all_delta_data(delta_dir):
 	delta_paths = get_json_paths(delta_dir)
-	all_deltas = []
+	all_deltas = {}
 	for delta_path in delta_paths:
 		with open(os.path.join(delta_dir, delta_path), "r") as f:
 			deltas = json.load(f)
-			all_deltas.append(deltas)
+			all_deltas.update(deltas)
 	return all_deltas
 
 
@@ -178,25 +178,33 @@ def process_animation_segment(
 	return frame_index + segment_frame_count, positions[-1]
 
 
-def create_animation_video(
-	combined_image, width, all_deltas, durations, output_file, static_duration=5.0
+def create_scrolling_video(
+	img_dir, delta_dir, output_dir, output_file, intro_duration=0.0
 ):
+	ensure_directory_exists(output_dir)
+	output_path = os.path.join(output_dir, output_file)
+	combined_image, width = combine_images(img_dir)
+	audio_to_delta = load_all_delta_data(delta_dir)
+	duration_data = load_duration_data(output_dir)
+	audio_files = sorted(audio_to_delta.keys())
 	fps = 60
 	height = 1350
-	ffmpeg_process = setup_ffmpeg_process(output_file, width, height, fps)
-	intro_frame_count = round(static_duration * fps)
+	ffmpeg_process = setup_ffmpeg_process(output_path, width, height, fps)
+	intro_frame_count = round(intro_duration * fps)
 	initial_viewport = combined_image.crop((0, 0, width, height))
 	current_frame = add_static_frames(
 		initial_viewport, ffmpeg_process, intro_frame_count
 	)
 	current_y = 0
-	for deltas, duration in zip(all_deltas, durations):
+	for audio_name in audio_files:
+		delta = audio_to_delta[audio_name]
+		duration = duration_data[audio_name]
 		current_frame, current_y = process_animation_segment(
 			combined_image,
 			width,
 			height,
 			current_y,
-			deltas,
+			[delta],
 			duration,
 			ffmpeg_process,
 			current_frame,
@@ -205,22 +213,6 @@ def create_animation_video(
 	ffmpeg_process.stdin.close()
 	ffmpeg_process.wait()
 	return current_frame
-
-
-def create_scrolling_video(
-	img_dir, delta_dir, output_dir, output_file, intro_duration=6.0
-):
-	ensure_directory_exists(output_dir)
-	output_path = os.path.join(output_dir, output_file)
-	combined_image, width = combine_images(img_dir)
-	all_deltas = load_all_delta_data(delta_dir)
-	durations = load_duration_data(output_dir)
-	if len(all_deltas) != len(durations):
-		return 0
-	total_frames = create_animation_video(
-		combined_image, width, all_deltas, durations, output_path, intro_duration
-	)
-	return total_frames
 
 
 if __name__ == "__main__":
@@ -233,5 +225,5 @@ if __name__ == "__main__":
 		delta_directory,
 		output_directory,
 		output_filename,
-		intro_duration=6.0,
+		intro_duration=0.0,
 	)
