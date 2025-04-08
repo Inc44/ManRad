@@ -29,17 +29,6 @@ def combine_images(image_dir):
 	return combined, width
 
 
-def load_deltas(delta_dir):
-	all_deltas = {}
-	for delta_file in sorted(
-		[f for f in os.listdir(delta_dir) if f.lower().endswith(".json")]
-	):
-		with open(os.path.join(delta_dir, delta_file), "r") as file:
-			delta_data = json.load(file)
-		all_deltas.update(delta_data)
-	return all_deltas
-
-
 @lru_cache(maxsize=2048)
 def ease(t):
 	if t < 0.4:
@@ -126,7 +115,7 @@ def process_segment(
 	return frame_idx + frame_count, positions[-1] if positions else start_y
 
 
-def create_video(img_dir, delta_dir, out_dir, out_file, intro_time=0.0):
+def create_video(img_dir, out_dir, out_file, intro_time=0.0):
 	os.makedirs(out_dir, exist_ok=True)
 	output_path = os.path.join(out_dir, out_file)
 	image_files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(".jpg")])
@@ -138,7 +127,8 @@ def create_video(img_dir, delta_dir, out_dir, out_file, intro_time=0.0):
 	image, width = combine_images(img_dir)
 	if not image:
 		return 0
-	deltas = load_deltas(delta_dir)
+	with open(os.path.join(out_dir, "delta_durations.json"), "r") as file:
+		deltas = json.load(file)
 	with open(os.path.join(out_dir, "audio_durations.json"), "r") as file:
 		durations = json.load(file)
 	audio_files = sorted(deltas.keys())
@@ -216,4 +206,4 @@ def create_video(img_dir, delta_dir, out_dir, out_file, intro_time=0.0):
 
 
 if __name__ == "__main__":
-	create_video("img", "delta", "output", "scroll.mkv")
+	create_video("img", "output", "scroll.mkv")

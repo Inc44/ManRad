@@ -240,6 +240,24 @@ def distribute_files_to_workers(files, num_workers):
 	return batches
 
 
+def merge_delta_json_files(delta_folder, output_folder):
+	os.makedirs(output_folder, exist_ok=True)
+	merged_data = {}
+	total_height = 0
+	json_files = [f for f in os.listdir(delta_folder) if f.endswith(".json")]
+	for filename in json_files:
+		file_path = os.path.join(delta_folder, filename)
+		with open(file_path, "r") as json_file:
+			file_data = json.load(json_file)
+		for key, value in file_data.items():
+			merged_data[key] = value
+			total_height += value
+	output_path = os.path.join(output_folder, "delta_durations.json")
+	with open(output_path, "w") as json_file:
+		json.dump(merged_data, json_file, indent="\t", ensure_ascii=False)
+	return total_height
+
+
 def run_ocr_processing():
 	folders = {
 		"images": "img",
@@ -247,6 +265,7 @@ def run_ocr_processing():
 		"annotated_small": "annotated",
 		"annotated_grouped": "annotated_grouped",
 		"deltas": "delta",
+		"output": "output",
 	}
 	create_directories(
 		[
@@ -254,6 +273,7 @@ def run_ocr_processing():
 			folders["annotated_small"],
 			folders["annotated_grouped"],
 			folders["deltas"],
+			folders["output"],
 		]
 	)
 	jpg_files = [f for f in os.listdir(folders["images"]) if f.lower().endswith(".jpg")]
@@ -274,6 +294,10 @@ def run_ocr_processing():
 			for task in tasks:
 				batch_results = task.get()
 				results.extend(batch_results)
+	total_height = merge_delta_json_files(folders["deltas"], folders["output"])
+	height_file_path = os.path.join(folders["output"], "total_height.txt")
+	with open(height_file_path, "w") as height_file:
+		height_file.write(str(total_height))
 	return len(results)
 
 
