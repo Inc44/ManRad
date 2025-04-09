@@ -292,7 +292,9 @@ def generate_scrolling_video(
 	if not image_specs or source_width <= 0:
 		return 0
 	v_start_list = [meta["vertical_start_position"] for meta in image_specs]
-	vertical_change_data_path = os.path.join(output_directory, "delta_durations.json")
+	vertical_change_data_path = os.path.join(
+		output_directory, "delta_durations_same_width.json"
+	)
 	segment_duration_data_path = os.path.join(output_directory, "audio_durations.json")
 	if not os.path.exists(vertical_change_data_path) or not os.path.exists(
 		segment_duration_data_path
@@ -368,7 +370,7 @@ def generate_scrolling_video(
 
 
 if __name__ == "__main__":
-	IMAGE_DIRECTORY = "img"
+	IMAGE_DIRECTORY = "img_same_width"
 	OUTPUT_DIRECTORY = "output"
 	OUTPUT_FILENAME = "scroll.mkv"
 	OUTPUT_FRAME_HEIGHT = 1350
