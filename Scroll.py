@@ -281,7 +281,7 @@ def generate_scrolling_video(
 	output_directory,
 	output_video_filename,
 	intro_hold_duration_seconds=0.0,
-	output_video_height_pixels=1350,
+	output_video_height_pixels=1000,
 	frames_per_second=60,
 ):
 	os.makedirs(output_directory, exist_ok=True)
@@ -373,7 +373,7 @@ if __name__ == "__main__":
 	IMAGE_DIRECTORY = "img_same_width"
 	OUTPUT_DIRECTORY = "output"
 	OUTPUT_FILENAME = "scroll.mkv"
-	OUTPUT_FRAME_HEIGHT = 1350
+	OUTPUT_FRAME_HEIGHT = 1000
 	VIDEO_FPS = 60
 	INTRO_HOLD_TIME = 0.0
 	delta_json_path = os.path.join(OUTPUT_DIRECTORY, "delta_durations.json")
