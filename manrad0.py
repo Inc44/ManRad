@@ -9,8 +9,6 @@ DIRS = {
 	"img_resized": "img_resized",
 	"output": "output",
 }
-
-
 if __name__ == "__main__":
 	# Init
 	for dir in DIRS.values():

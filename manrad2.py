@@ -1,11 +1,10 @@
-from PIL import Image, ImageDraw
 from manrad0 import DIRS
 from manrad1 import batches_distribute
 from multiprocessing import Pool, cpu_count
 from paddleocr import PaddleOCR, draw_ocr
+import cv2
 import json
 import math
-import numpy as np
 import os
 
 CORES = 6
@@ -113,26 +112,36 @@ def boxes_order(bounds, centers, width):
 
 
 def box_draw(bounds, img, order):
-	img = img.copy()
-	draw = ImageDraw.Draw(img)
+	img_copy = img.copy()
 	for i, box in enumerate(order):
 		x_min, y_min, x_max, y_max = bounds[box]
-		draw.rectangle([(x_min, y_min), (x_max, y_max)], outline="red", width=2)
-		draw.text((x_min + 4, y_min + 4), str(i + 1), fill="red")
-	return img
+		x_min, y_min, x_max, y_max = int(x_min), int(y_min), int(x_max), int(y_max)
+		red = (0, 0, 255)
+		cv2.rectangle(img_copy, (x_min, y_min), (x_max, y_max), red, 1)
+		cv2.putText(
+			img_copy,
+			str(i + 1),
+			(x_min + 4, y_min + 16),
+			cv2.FONT_HERSHEY_PLAIN,
+			1,
+			red,
+			1,
+		)
+	return img_copy
 
 
 def img_crop(basename, bounds, img, order, output_dir_crops):
+	height, width = img.shape[:2]
 	for i, box in enumerate(order):
 		x_min, y_min, x_max, y_max = bounds[box]
 		x_min = max(0, int(x_min))
 		y_min = max(0, int(y_min))
-		x_max = min(img.width, int(x_max))
-		y_max = min(img.height, int(y_max))
-		crop = img.crop((x_min, y_min, x_max, y_max))
+		x_max = min(width, int(x_max))
+		y_max = min(height, int(y_max))
+		crop = img[y_min:y_max, x_min:x_max]
 		filename = f"{basename}{i+1:03d}.jpg"
 		path = os.path.join(output_dir_crops, filename)
-		crop.save(path, quality=100)
+		cv2.imwrite(path, crop, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
 
 def delta(bounds, height, height_range, order):
@@ -202,19 +211,20 @@ def img_detect(
 	if not ocrs or len(ocrs) == 0 or not ocrs[0]:
 		return
 	boxes = [item[0] for item in ocrs[0]]
-	img = Image.open(path).convert("RGB")
-	img_box = draw_ocr(np.array(img), boxes)
-	img_box = Image.fromarray(img_box)
+	img = cv2.imread(path)
+	img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+	img_box = draw_ocr(img_rgb, boxes)
+	img_box = cv2.cvtColor(img_box, cv2.COLOR_RGB2BGR)
 	path_box = os.path.join(output_dir_box, os.path.basename(path))
-	img_box.save(path_box)
+	cv2.imwrite(path_box, img_box)
 	connected = box_group(boxes, max_distance)
 	bounds, centers = bounds_and_centers(boxes, connected, margin)
-	order = boxes_order(bounds, centers, img.width)
+	order = boxes_order(bounds, centers, img.shape[1])
 	img_group = box_draw(bounds, img, order)
 	path_group = os.path.join(output_dir_group, os.path.basename(path))
-	img_group.save(path_group)
+	cv2.imwrite(path_group, img_group)
 	img_crop(basename, bounds, img, order, output_dir_crops)
-	gaps = delta(bounds, img.height, height_range, order)
+	gaps = delta(bounds, img.shape[0], height_range, order)
 	delta_json(basename, gaps, output_dir_deltas)
 
 
