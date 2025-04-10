@@ -158,6 +158,7 @@ def batch_img_text(
 
 
 if __name__ == "__main__":
+	# Text
 	imgs = sorted(
 		[f for f in os.listdir(DIRS["img_crops"]) if f.lower().endswith(".jpg")]
 	)

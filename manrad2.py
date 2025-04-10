@@ -275,6 +275,7 @@ def delta_json_merge(output_dir, output_dir_deltas):
 
 
 if __name__ == "__main__":
+	# Box, Crop, Delta, Group
 	imgs = sorted(
 		[f for f in os.listdir(DIRS["img_resized"]) if f.lower().endswith(".jpg")]
 	)
