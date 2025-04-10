@@ -7,6 +7,7 @@ DIRS = {
 	"img_deltas": "img_deltas",
 	"img_grouped": "img_grouped",
 	"img_resized": "img_resized",
+	"img_text": "img_text",
 	"output": "output",
 }
 if __name__ == "__main__":
