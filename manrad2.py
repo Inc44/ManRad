@@ -285,5 +285,5 @@ if __name__ == "__main__":
 			)
 			for batch in batches
 		]
-		pool.starmap(batch_img_detect, args)
+		pool.starmap_async(batch_img_detect, args).get()
 	delta_json_merge(DIRS["output"], DIRS["img_deltas"])

@@ -38,4 +38,4 @@ if __name__ == "__main__":
 	batches = batches_distribute(cores, imgs)
 	with Pool(processes=cores) as pool:
 		args = [(batch, DIRS["img"], DIRS["img_resized"]) for batch in batches]
-		pool.map(batch_img_resize, args)
+		pool.map_async(batch_img_resize, args).get()
