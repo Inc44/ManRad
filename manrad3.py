@@ -10,9 +10,10 @@ import time
 
 API_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 API_KEY = os.environ.get("DEEPINFRA_API_KEY")
-CORES = 6
+CORES = 60
 LANGUAGE = "Russian"
 MAX_TOKENS = 2000
+MIN_SIZE = 13
 MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
 PAUSE = 10
 PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any introductory phrases or additional commentary. If no readable text is found, the text content is empty. Return JSON: [{{"text": "text content"}}, ...]'
@@ -23,13 +24,20 @@ TEMPERATURE_INCREASE = 0.2
 
 def sanitized_parse_json(string):
 	string = regex.sub(r"[\x00-\x1F\x7F]", "", string)
-	string = regex.sub(r"[^\p{Latin}\p{Cyrillic}\p{N}\p{P}\p{Z}]", "", string)
+	string = regex.sub(r"[^A-Za-z\p{Cyrillic}\p{N}\p{P}\p{Z}]", "", string)  # \p{Latin}
 	try:
 		return json.loads(string)
 	except:
 		matches = regex.findall(r'"text"\s*:\s*"([^"]*)"', string)
 		if matches:
-			return [{"text": match} for match in matches]
+			return [
+				{
+					"text": bytes(match, "utf-8").decode("unicode_escape")
+					if "\\u" in match
+					else match
+				}
+				for match in matches
+			]
 		return [{"text": ""}] if '"text"' in string else []
 
 
@@ -40,6 +48,7 @@ def img_text(
 	filename,
 	input_dir,
 	max_tokens,
+	min_size,
 	model,
 	output_dir_text,
 	pause,
@@ -54,12 +63,13 @@ def img_text(
 	path = os.path.join(input_dir, filename)
 	text_filename = f"{basename}.json"
 	text_path = os.path.join(output_dir_text, text_filename)
-	if valid(text_path):
+	if valid_json(text_path, min_size):
 		return
 	with open(path, "rb") as f:
 		img = base64.b64encode(f.read()).decode()
 	headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 	payload = {
+		"max_tokens": max_tokens,
 		"model": model,
 		"messages": [
 			{
@@ -73,8 +83,8 @@ def img_text(
 				],
 			}
 		],
+		"seed": 42,
 		"temperature": temperature,
-		"max_tokens": max_tokens,
 	}
 	try:
 		response = requests.post(api_endpoint, headers=headers, json=payload)
@@ -86,7 +96,7 @@ def img_text(
 				sanitized_json = sanitized_parse_json(content[start:end])
 				if (
 					sanitized_json
-					and len(str(sanitized_json)) > 12
+					and len(str(sanitized_json)) >= min_size
 					and isinstance(sanitized_json, list)
 					and all(isinstance(item, dict) for item in sanitized_json)
 				):
@@ -113,8 +123,8 @@ def img_text(
 	)
 
 
-def valid(path):
-	if not os.path.exists(path) or os.stat(path).st_size < 13:
+def valid_json(path, min_size):
+	if not os.path.exists(path) or os.stat(path).st_size < min_size:
 		return False
 	try:
 		with open(path, encoding="utf-8") as f:
@@ -131,6 +141,7 @@ def batch_img_text(
 	batch,
 	input_dir,
 	max_tokens,
+	min_size,
 	model,
 	output_dir_text,
 	pause,
@@ -147,6 +158,7 @@ def batch_img_text(
 			filename,
 			input_dir,
 			max_tokens,
+			min_size,
 			model,
 			output_dir_text,
 			pause,
@@ -173,6 +185,7 @@ if __name__ == "__main__":
 				batch,
 				DIRS["img_crops"],
 				MAX_TOKENS,
+				MIN_SIZE,
 				MODEL,
 				DIRS["img_text"],
 				PAUSE,
