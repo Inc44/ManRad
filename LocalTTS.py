@@ -2,7 +2,6 @@ from Help import process_dir
 import base64
 import os
 import requests
-import sys
 import time
 
 
@@ -20,8 +19,8 @@ def make_audio(
 	retry=5,
 	wait=5.0,
 	min_size=256,
-	reference_audio=r"g:\My Drive\Files\Else\AI\llElevenLabs\Voice Cloning\Source\Nas.flac",
-	reference_text_path=r"g:\My Drive\Files\Else\AI\Fish Speech\source2\Nas.txt",
+	reference_audio="reference/reference_audio.flac",
+	reference_text_path="reference/reference_text.txt",
 	url="http://127.0.0.1:8080/v1/tts",
 ):
 	text = text.strip()[:4096]
@@ -64,5 +63,4 @@ def make_audio(
 
 
 if __name__ == "__main__":
-	if len(sys.argv) > 1:
-		process_dir(make_audio, sys.argv[1])
+	process_dir(make_audio)

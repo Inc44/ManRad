@@ -36,11 +36,9 @@ def process_file(make_audio, path, out_dir):
 	return {"file": path, "audio": out, "status": status}
 
 
-def process_dir(make_audio, base, workers=10):
-	if not os.path.isdir(base):
-		return []
-	json_dir = os.path.join(base, "json")
-	wav_dir = os.path.join(base, "wav")
+def process_dir(make_audio, workers=10):
+	json_dir = "img_text"
+	wav_dir = "img_audio"
 	if not os.path.isdir(json_dir):
 		return []
 	os.makedirs(wav_dir, exist_ok=True)

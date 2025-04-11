@@ -8,7 +8,7 @@ import requests
 import regex
 import time
 
-API_ENDPOINT = "http://127.0.0.1:7860/v1/tts"
+API_ENDPOINT = "http://127.0.0.1:8080/v1/tts"
 CORES = 6
 MAX_TOKENS = 2000
 MIN_SIZE = 78
@@ -165,4 +165,5 @@ if __name__ == "__main__":
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_img_audio, args).get()
+		# pool.starmap_async(batch_img_audio, args).get()
+		batch_img_audio(*args[0])
