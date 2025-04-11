@@ -108,7 +108,7 @@ def img_audio(
 
 
 def valid_audio(path, min_size):
-	return os.path.exists(path) or os.stat(path).st_size < min_size
+	return os.path.exists(path) and os.stat(path).st_size >= min_size
 
 
 def batch_img_audio(
