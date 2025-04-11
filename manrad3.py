@@ -128,8 +128,8 @@ def valid_json(path, min_size):
 		return False
 	try:
 		with open(path, encoding="utf-8") as f:
-			string = json.load(f)
-		return isinstance(string, list) and string
+			data = json.load(f)
+		return isinstance(data, list) and data
 	except:
 		return False
 
