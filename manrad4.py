@@ -49,8 +49,6 @@ def img_audio(
 	retries,
 	temperature,
 ):
-	if attempt >= retries:
-		return []
 	basename, _ = os.path.splitext(filename)
 	path = os.path.join(input_dir, filename)
 	audio_filename = f"{basename}.wav"
@@ -58,6 +56,8 @@ def img_audio(
 	if valid_audio(audio_path, min_size):
 		return
 	text = parse_json(path, max_tokens)
+	if len(text) == 0:
+		return
 	with open(reference_text_path, "r", encoding="utf-8") as f:
 		reference_text = f.read().strip()
 	with open(reference_audio_path, "rb") as f:
@@ -79,30 +79,19 @@ def img_audio(
 		"text": text,
 		"use_memory_cache": "on",
 	}
-	try:
-		response = requests.post(api_endpoint, headers=headers, json=payload)
-		if response.status_code == 200:
-			with open(audio_path, "wb") as f:
-				f.write(response.content)
-			if valid_audio(audio_path, min_size):
-				return
-	except:
-		pass
-	time.sleep(pause)
-	return img_audio(
-		api_endpoint,
-		attempt + 1,
-		filename,
-		input_dir,
-		max_tokens,
-		min_size,
-		output_dir_audio,
-		pause * 2,
-		reference_audio_path,
-		reference_text_path,
-		retries,
-		temperature,
-	)
+	for attempt in range(attempt, retries):
+		try:
+			response = requests.post(api_endpoint, headers=headers, json=payload)
+			if response.status_code == 200:
+				with open(audio_path, "wb") as f:
+					f.write(response.content)
+				if valid_audio(audio_path, min_size):
+					return
+		except:
+			pass
+		if attempt < retries - 1:
+			sleep_time = pause * (2**attempt)
+			time.sleep(sleep_time)
 
 
 def valid_audio(path, min_size):
@@ -141,7 +130,6 @@ def batch_img_audio(
 
 
 if __name__ == "__main__":
-	# Audio
 	texts = sorted(
 		[f for f in os.listdir(DIRS["img_text"]) if f.lower().endswith(".json")]
 	)
@@ -165,5 +153,4 @@ if __name__ == "__main__":
 			)
 			for batch in batches
 		]
-		# pool.starmap_async(batch_img_audio, args).get()
-		batch_img_audio(*args[0])
+		pool.starmap(batch_img_audio, args)
