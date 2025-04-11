@@ -130,6 +130,7 @@ def batch_img_audio(
 
 
 if __name__ == "__main__":
+	# Audio
 	texts = sorted(
 		[f for f in os.listdir(DIRS["img_text"]) if f.lower().endswith(".json")]
 	)
