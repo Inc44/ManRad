@@ -28,7 +28,7 @@ def parse_json(path, max_tokens):
 		text = data.get("text", "")
 	else:
 		return ""
-	text = text.replace("\n", " ").replace("- ", "")
+	text = text.replace("- ", "")
 	text = regex.sub(r"\s+", " ", text).strip()
 	if text:
 		text = text[0].upper() + text[1:]
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 				DIRS["img_audio"],
 				PAUSE,
 				REFERENCE_AUDIO,
-				REFERENCE_AUDIO,
+				REFERENCE_TEXT,
 				RETRIES,
 				TEMPERATURE,
 			)
