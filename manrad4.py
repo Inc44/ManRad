@@ -42,7 +42,7 @@ def img_audio(
 	input_dir,
 	max_tokens,
 	min_size,
-	output_dir_text,
+	output_dir_audio,
 	pause,
 	reference_audio_path,
 	reference_text_path,
@@ -54,7 +54,7 @@ def img_audio(
 	basename, _ = os.path.splitext(filename)
 	path = os.path.join(input_dir, filename)
 	audio_filename = f"{basename}.wav"
-	audio_path = os.path.join(output_dir_text, audio_filename)
+	audio_path = os.path.join(output_dir_audio, audio_filename)
 	if valid_audio(audio_path, min_size):
 		return
 	text = parse_json(path, max_tokens)
@@ -84,7 +84,8 @@ def img_audio(
 		if response.status_code == 200:
 			with open(audio_path, "wb") as f:
 				f.write(response.content)
-			valid_audio(audio_path, min_size)
+			if valid_audio(audio_path, min_size):
+				return
 	except:
 		pass
 	time.sleep(pause)
@@ -95,7 +96,7 @@ def img_audio(
 		input_dir,
 		max_tokens,
 		min_size,
-		output_dir_text,
+		output_dir_audio,
 		pause * 2,
 		reference_audio_path,
 		reference_text_path,
