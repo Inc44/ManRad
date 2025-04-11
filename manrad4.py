@@ -8,7 +8,7 @@ import requests
 import regex
 import time
 
-API_ENDPOINT = "http://0.0.0.0:7860/v1/tts"
+API_ENDPOINT = "http://127.0.0.1:7860/v1/tts"
 CORES = 6
 MAX_TOKENS = 2000
 MIN_SIZE = 78
@@ -44,7 +44,6 @@ def img_audio(
 	min_size,
 	output_dir_text,
 	pause,
-	prompt,
 	reference_audio_path,
 	reference_text_path,
 	retries,
@@ -64,7 +63,6 @@ def img_audio(
 	with open(reference_audio_path, "rb") as f:
 		reference_audio = base64.b64encode(f.read()).decode()
 	references = []
-	reference_text = None
 	if reference_text and reference_audio:
 		references.append({"audio": reference_audio, "text": reference_text})
 	headers = {"Content-Type": "application/json"}
@@ -99,7 +97,6 @@ def img_audio(
 		min_size,
 		output_dir_text,
 		pause * 2,
-		prompt,
 		reference_audio_path,
 		reference_text_path,
 		retries,
@@ -145,7 +142,7 @@ def batch_img_audio(
 if __name__ == "__main__":
 	# Audio
 	texts = sorted(
-		[f for f in os.listdir(DIRS["img_text"]) if f.lower().endswith(".jpg")]
+		[f for f in os.listdir(DIRS["img_text"]) if f.lower().endswith(".json")]
 	)
 	cores = min(CORES, cpu_count())
 	batches = batches_distribute(cores, texts)
