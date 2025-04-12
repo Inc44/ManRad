@@ -5,7 +5,7 @@ DIRS = {
 	"img_audio": "img_audio",
 	"img_boxed": "img_boxed",
 	"img_crops": "img_crops",
-	"img_crops_durations": "img_crops_durations",
+	"img_durations": "img_durations",
 	"img_deltas": "img_deltas",
 	"img_grouped": "img_grouped",
 	"img_resized": "img_resized",
