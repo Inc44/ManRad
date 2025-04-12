@@ -6,8 +6,16 @@ import os
 import requests
 import time
 
-API_ENDPOINTS = ["https://api.openai.com/v1/audio/speech"]
-API_KEYS = [os.environ.get("OPENAI_API_KEY")]
+API_ENDPOINTS = [
+	"http://localhost:8880/v1/audio/speech",  # Kokoro
+	"https://api.lemonfox.ai/v1/audio/speech",  # Lemon
+	"https://api.openai.com/v1/audio/speech",  # OpenAI
+]
+API_KEYS = [
+	"not-needed",  # Kokoro
+	os.environ.get("LEMON_API_KEY"),  # Lemon
+	os.environ.get("OPENAI_API_KEY"),  # OpenAI
+]
 INSTRUCTIONS = [
 	"",
 	"Speak in an emotive and friendly tone... Read only if the text is in Russian",
@@ -15,10 +23,19 @@ INSTRUCTIONS = [
 ]
 MAX_TOKENS = 2000
 MIN_SIZE = 78
-MODELS = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
+MODELS = [
+	"gpt-4o-mini-tts",  # OpenAI
+	"tts-1",  # OpenAI, Kokoro, Lemon
+	"tts-1-hd",  # OpenAI
+]
 PAUSE = 10
 RETRIES = 3
-VOICES = ["sage", "ash", "onyx"]
+VOICES = [
+	"am_onyx",  # Kokoro
+	"ash",  # OpenAI
+	"onyx",  # OpenAI, Lemon
+	"sage",  # OpenAI
+]
 WORKERS = 6
 
 
@@ -112,19 +129,19 @@ if __name__ == "__main__":
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINTS[0],
-				API_KEYS[0],
+				API_ENDPOINTS[3],
+				API_KEYS[3],
 				0,
 				batch,
 				DIRS["image_text"],
 				INSTRUCTIONS[0],
 				MAX_TOKENS,
 				MIN_SIZE,
-				MODELS[0],
+				MODELS[1],
 				DIRS["image_audio"],
 				PAUSE,
 				RETRIES,
-				VOICES[0],
+				VOICES[3],
 			)
 			for batch in batches
 		]
