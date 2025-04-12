@@ -1,15 +1,14 @@
-import json
 from manrad0 import DIRS
-from manrad1 import batches_distribute
+from manrad1 import split_batches
 from multiprocessing import Pool, cpu_count
 import base64
+import json
 import os
-import requests
 import regex
+import requests
 import time
 
 API_ENDPOINT = "http://127.0.0.1:8080/v1/tts"
-CORES = 6
 MAX_TOKENS = 2000
 MIN_SIZE = 78
 PAUSE = 10
@@ -17,9 +16,10 @@ REFERENCE_AUDIO = "reference/reference_audio.flac"
 REFERENCE_TEXT = "reference/reference_text.txt"
 RETRIES = 3
 TEMPERATURE = 0.1
+WORKERS = 6
 
 
-def parse_json(max_tokens, path):
+def parse_text_json(max_tokens, path):
 	with open(path, "r", encoding="utf-8") as f:
 		data = json.load(f)
 	if isinstance(data, list):
@@ -35,14 +35,18 @@ def parse_json(max_tokens, path):
 	return text[: max_tokens * 2]
 
 
-def img_audio(
+def is_valid_audio(min_size, path):
+	return os.path.exists(path) and os.stat(path).st_size >= min_size
+
+
+def text_to_audio(
 	api_endpoint,
 	attempt,
 	filename,
 	input_dir,
 	max_tokens,
 	min_size,
-	output_dir_audio,
+	output_dir,
 	pause,
 	reference_audio_path,
 	reference_text_path,
@@ -52,10 +56,10 @@ def img_audio(
 	basename, _ = os.path.splitext(filename)
 	path = os.path.join(input_dir, filename)
 	audio_filename = f"{basename}.wav"
-	audio_path = os.path.join(output_dir_audio, audio_filename)
-	if valid_audio(min_size, path):
+	audio_path = os.path.join(output_dir, audio_filename)
+	if is_valid_audio(min_size, audio_path):
 		return
-	text = parse_json(max_tokens, path)
+	text = parse_text_json(max_tokens, path)
 	if len(text) == 0:
 		return
 	with open(reference_text_path, "r", encoding="utf-8") as f:
@@ -85,7 +89,7 @@ def img_audio(
 			if response.status_code == 200:
 				with open(audio_path, "wb") as f:
 					f.write(response.content)
-				if valid_audio(min_size, path):
+				if is_valid_audio(min_size, audio_path):
 					return
 		except:
 			pass
@@ -94,18 +98,14 @@ def img_audio(
 			time.sleep(sleep_time)
 
 
-def valid_audio(min_size, path):
-	return os.path.exists(path) and os.stat(path).st_size >= min_size
-
-
-def batch_img_audio(
+def batch_text_to_audio(
 	api_endpoint,
 	attempt,
 	batch,
 	input_dir,
 	max_tokens,
 	min_size,
-	output_dir_audio,
+	output_dir,
 	pause,
 	reference_audio_path,
 	reference_text_path,
@@ -113,14 +113,14 @@ def batch_img_audio(
 	temperature,
 ):
 	for filename in batch:
-		img_audio(
+		text_to_audio(
 			api_endpoint,
 			attempt,
 			filename,
 			input_dir,
 			max_tokens,
 			min_size,
-			output_dir_audio,
+			output_dir,
 			pause,
 			reference_audio_path,
 			reference_text_path,
@@ -130,22 +130,21 @@ def batch_img_audio(
 
 
 if __name__ == "__main__":
-	# Audio
 	texts = sorted(
-		[f for f in os.listdir(DIRS["img_text"]) if f.lower().endswith(".json")]
+		[f for f in os.listdir(DIRS["image_text"]) if f.lower().endswith(".json")]
 	)
-	cores = min(CORES, cpu_count())
-	batches = batches_distribute(cores, texts)
-	with Pool(processes=cores) as pool:
+	workers = min(WORKERS, cpu_count())
+	batches = split_batches(workers, texts)
+	with Pool(processes=workers) as pool:
 		args = [
 			(
 				API_ENDPOINT,
 				0,
 				batch,
-				DIRS["img_text"],
+				DIRS["image_text"],
 				MAX_TOKENS,
 				MIN_SIZE,
-				DIRS["img_audio"],
+				DIRS["image_audio"],
 				PAUSE,
 				REFERENCE_AUDIO,
 				REFERENCE_TEXT,
@@ -154,4 +153,4 @@ if __name__ == "__main__":
 			)
 			for batch in batches
 		]
-		pool.starmap(batch_img_audio, args)
+		pool.starmap_async(batch_text_to_audio, args).get()

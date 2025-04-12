@@ -1,5 +1,5 @@
 from manrad0 import DIRS
-from manrad1 import batches_distribute
+from manrad1 import split_batches
 from multiprocessing import Pool, cpu_count
 from paddleocr import PaddleOCR, draw_ocr
 import cv2
@@ -7,13 +7,13 @@ import json
 import math
 import os
 
-CORES = 6
 HEIGHT_RANGE = 96
 MARGIN = 16
 MAX_DISTANCE = 32
+WORKERS = 6
 
 
-def box_bound(box):
+def get_box_bounds(box):
 	min_x = min(p[0] for p in box)
 	min_y = min(p[1] for p in box)
 	max_x = max(p[0] for p in box)
@@ -21,59 +21,53 @@ def box_bound(box):
 	return min_x, min_y, max_x, max_y
 
 
-def box_distance(box1, box2):
-	min_x1, min_y1, max_x1, max_y1 = box_bound(box1)
-	min_x2, min_y2, max_x2, max_y2 = box_bound(box2)
-	if min_x1 <= max_x2 and min_x2 <= max_x1:
-		dx = 0
-	else:
-		dx = max(min_x1 - max_x2, min_x2 - max_x1)
-	if min_y1 <= max_y2 and min_y2 <= max_y1:
-		dy = 0
-	else:
-		dy = max(min_y1 - max_y2, min_y2 - max_y1)
+def get_box_distance(box1, box2):
+	min_x1, min_y1, max_x1, max_y1 = get_box_bounds(box1)
+	min_x2, min_y2, max_x2, max_y2 = get_box_bounds(box2)
+	dx = max(min_x1 - max_x2, min_x2 - max_x1, 0)
+	dy = max(min_y1 - max_y2, min_y2 - max_y1, 0)
 	return math.sqrt(dx**2 + dy**2)
 
 
-def nodes_collect(adjacency_list, current, node, visited):
+def collect_connected_nodes(adj_list, current, node, visited):
 	visited[node] = True
 	current.append(node)
-	for neighbor in adjacency_list[node]:
+	for neighbor in adj_list[node]:
 		if not visited[neighbor]:
-			nodes_collect(adjacency_list, current, neighbor, visited)
+			collect_connected_nodes(adj_list, current, neighbor, visited)
 
 
-def box_group(boxes, max_distance):
-	box_count = len(boxes)
-	if box_count == 0:
+def group_boxes(boxes, max_distance):
+	count = len(boxes)
+	if count == 0:
 		return []
-	adjacency_list = [[] for _ in range(box_count)]
-	for i in range(box_count):
-		for j in range(i + 1, box_count):
-			if box_distance(boxes[i], boxes[j]) <= max_distance:
-				adjacency_list[i].append(j)
-				adjacency_list[j].append(i)
-	visited = [False] * box_count
-	connected = []
-	for i in range(box_count):
+	adj_list = [[] for _ in range(count)]
+	for i in range(count):
+		for j in range(i + 1, count):
+			if get_box_distance(boxes[i], boxes[j]) <= max_distance:
+				adj_list[i].append(j)
+				adj_list[j].append(i)
+	visited = [False] * count
+	groups = []
+	for i in range(count):
 		if not visited[i]:
 			current = []
-			nodes_collect(adjacency_list, current, i, visited)
-			connected.append(current)
-	return connected
+			collect_connected_nodes(adj_list, current, i, visited)
+			groups.append(current)
+	return groups
 
 
-def bounds_and_centers(boxes, groups, margin):
+def get_bounds_and_centers(boxes, groups, margin):
 	bounds = []
 	centers = []
 	for group in groups:
 		points = []
 		for i in group:
 			points.extend(boxes[i])
-		min_x = min(point[0] for point in points) - margin
-		min_y = min(point[1] for point in points) - margin
-		max_x = max(point[0] for point in points) + margin
-		max_y = max(point[1] for point in points) + margin
+		min_x = min(p[0] for p in points) - margin
+		min_y = min(p[1] for p in points) - margin
+		max_x = max(p[0] for p in points) + margin
+		max_y = max(p[1] for p in points) + margin
 		bounds.append((min_x, min_y, max_x, max_y))
 		center_x = (min_x + max_x) / 2
 		center_y = (min_y + max_y) / 2
@@ -81,37 +75,37 @@ def bounds_and_centers(boxes, groups, margin):
 	return bounds, centers
 
 
-def priority(y_difference, corner_distance):
-	return (y_difference * 3) + corner_distance
+def get_priority(y_diff, corner_dist):
+	return (y_diff * 3) + corner_dist
 
 
-def boxes_order(bounds, centers, width):
+def order_boxes(bounds, centers, width):
 	if not centers:
 		return []
 	ranking = []
 	for i, center in enumerate(centers):
-		corner_distance = math.sqrt((width - center[0]) ** 2 + center[1] ** 2)
-		y_position = bounds[i][1]
-		ranking.append((i, corner_distance, y_position))
+		corner_dist = math.sqrt((width - center[0]) ** 2 + center[1] ** 2)
+		y_pos = bounds[i][1]
+		ranking.append((i, corner_dist, y_pos))
 	ranking.sort(key=lambda x: x[1])
 	order = [ranking[0][0]]
-	previous_y = bounds[ranking[0][0]][1]
+	prev_y = bounds[ranking[0][0]][1]
 	unprocessed = ranking[1:]
 	while unprocessed:
-		priority_scores = []
-		for i, corner_distance, y_position in unprocessed:
-			y_difference = abs(y_position - previous_y)
-			priority_score = priority(y_difference, corner_distance)
-			priority_scores.append((i, priority_score))
-		priority_scores.sort(key=lambda x: x[1])
-		next_score = priority_scores[0][0]
-		order.append(next_score)
-		previous_y = bounds[next_score][1]
-		unprocessed = [(i, d, y) for i, d, y in unprocessed if i != next_score]
+		scores = []
+		for i, corner_dist, y_pos in unprocessed:
+			y_diff = abs(y_pos - prev_y)
+			score = get_priority(y_diff, corner_dist)
+			scores.append((i, score))
+		scores.sort(key=lambda x: x[1])
+		next_index = scores[0][0]
+		order.append(next_index)
+		prev_y = bounds[next_index][1]
+		unprocessed = [(i, d, y) for i, d, y in unprocessed if i != next_index]
 	return order
 
 
-def box_draw(bounds, img, order):
+def draw_boxes(bounds, img, order):
 	img_copy = img.copy()
 	for i, box in enumerate(order):
 		x_min, y_min, x_max, y_max = bounds[box]
@@ -130,7 +124,7 @@ def box_draw(bounds, img, order):
 	return img_copy
 
 
-def img_crop(basename, bounds, img, order, output_dir_crops):
+def crop_images(basename, bounds, img, order, output_dir):
 	height, width = img.shape[:2]
 	for i, box in enumerate(order):
 		x_min, y_min, x_max, y_max = bounds[box]
@@ -140,28 +134,27 @@ def img_crop(basename, bounds, img, order, output_dir_crops):
 		y_max = min(height, int(y_max))
 		crop = img[y_min:y_max, x_min:x_max]
 		filename = f"{basename}{i+1:03d}.jpg"
-		path = os.path.join(output_dir_crops, filename)
+		path = os.path.join(output_dir, filename)
 		cv2.imwrite(path, crop, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
 
-def delta(bounds, height, height_range, order):
+def get_gaps(bounds, height, height_range, order):
 	if not order:
 		return [height]
 	positions = [bounds[i][1] for i in order]
-	gaps = []
-	gaps.append(positions[0])
+	gaps = [positions[0]]
 	for i in range(1, len(positions)):
 		gaps.append(positions[i] - positions[i - 1])
 	gaps.append(height - positions[-1])
-	remaining_space = 0
+	remaining = 0
 	for i in range(len(gaps)):
-		gaps[i] += remaining_space
-		remaining_space = 0
+		gaps[i] += remaining
+		remaining = 0
 		if gaps[i] < height_range:
-			remaining_space = gaps[i]
+			remaining = gaps[i]
 			gaps[i] = 0
-	if remaining_space > 0:
-		gaps[-1] += remaining_space
+	if remaining > 0:
+		gaps[-1] += remaining
 	gaps = [max(0, gap) for gap in gaps]
 	total = sum(gaps)
 	if total != height:
@@ -169,17 +162,17 @@ def delta(bounds, height, height_range, order):
 	return gaps
 
 
-def delta_json(basename, gaps, output_dir_deltas):
-	path = os.path.join(output_dir_deltas, f"{basename}.json")
-	deltas = {}
+def save_gaps_json(basename, gaps, output_dir):
+	path = os.path.join(output_dir, f"{basename}.json")
+	data = {}
 	for i, gap in enumerate(gaps):
 		key = f"{basename}{i+1:03d}"
-		deltas[key] = gap
+		data[key] = gap
 	with open(path, "w") as f:
-		json.dump(deltas, f, indent="\t", ensure_ascii=False)
+		json.dump(data, f, indent="\t", ensure_ascii=False)
 
 
-def ocr_engine_init():
+def init_ocr_engine():
 	return PaddleOCR(
 		gpu_id=0,
 		gpu_mem=1000,
@@ -193,7 +186,7 @@ def ocr_engine_init():
 	)
 
 
-def img_detect(
+def detect_image(
 	filename,
 	height_range,
 	input_dir,
@@ -202,7 +195,7 @@ def img_detect(
 	ocr_engine,
 	output_dir_box,
 	output_dir_crops,
-	output_dir_deltas,
+	output_dir_gaps,
 	output_dir_group,
 ):
 	basename, _ = os.path.splitext(filename)
@@ -217,18 +210,18 @@ def img_detect(
 	img_box = cv2.cvtColor(img_box, cv2.COLOR_RGB2BGR)
 	path_box = os.path.join(output_dir_box, os.path.basename(path))
 	cv2.imwrite(path_box, img_box)
-	connected = box_group(boxes, max_distance)
-	bounds, centers = bounds_and_centers(boxes, connected, margin)
-	order = boxes_order(bounds, centers, img.shape[1])
-	img_group = box_draw(bounds, img, order)
+	groups = group_boxes(boxes, max_distance)
+	bounds, centers = get_bounds_and_centers(boxes, groups, margin)
+	order = order_boxes(bounds, centers, img.shape[1])
+	img_group = draw_boxes(bounds, img, order)
 	path_group = os.path.join(output_dir_group, os.path.basename(path))
 	cv2.imwrite(path_group, img_group)
-	img_crop(basename, bounds, img, order, output_dir_crops)
-	gaps = delta(bounds, img.shape[0], height_range, order)
-	delta_json(basename, gaps, output_dir_deltas)
+	crop_images(basename, bounds, img, order, output_dir_crops)
+	gaps = get_gaps(bounds, img.shape[0], height_range, order)
+	save_gaps_json(basename, gaps, output_dir_gaps)
 
 
-def batch_img_detect(
+def batch_detect_images(
 	batch,
 	height_range,
 	input_dir,
@@ -236,12 +229,12 @@ def batch_img_detect(
 	max_distance,
 	output_dir_box,
 	output_dir_crops,
-	output_dir_deltas,
+	output_dir_gaps,
 	output_dir_group,
 ):
-	ocr_engine = ocr_engine_init()
+	ocr_engine = init_ocr_engine()
 	for filename in batch:
-		img_detect(
+		detect_image(
 			filename,
 			height_range,
 			input_dir,
@@ -250,51 +243,50 @@ def batch_img_detect(
 			ocr_engine,
 			output_dir_box,
 			output_dir_crops,
-			output_dir_deltas,
+			output_dir_gaps,
 			output_dir_group,
 		)
 
 
-def delta_json_merge(output_dir, output_dir_deltas):
-	deltas = {}
+def merge_gaps_json(output_dir, input_dir):
+	data = {}
 	total = 0
-	jsons = [f for f in os.listdir(output_dir_deltas) if f.endswith(".json")]
-	for filename in jsons:
-		path = os.path.join(output_dir_deltas, filename)
+	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
+	for filename in files:
+		path = os.path.join(input_dir, filename)
 		with open(path, "r") as f:
-			delta = json.load(f)
-		for key, value in delta.items():
-			deltas[key] = value
+			gap = json.load(f)
+		for key, value in gap.items():
+			data[key] = value
 			total += value
-	path = os.path.join(output_dir, "deltas.json")
+	path = os.path.join(output_dir, "gaps.json")
 	with open(path, "w") as f:
-		json.dump(deltas, f, indent="\t", ensure_ascii=False)
-	path = os.path.join(output_dir, "total_delta.txt")
+		json.dump(data, f, indent="\t", ensure_ascii=False)
+	path = os.path.join(output_dir, "total_gaps.txt")
 	with open(path, "w") as f:
 		f.write(str(total))
 
 
 if __name__ == "__main__":
-	# Box, Crop, Delta, Group
-	imgs = sorted(
-		[f for f in os.listdir(DIRS["img_resized"]) if f.lower().endswith(".jpg")]
+	images = sorted(
+		[f for f in os.listdir(DIRS["image_resized"]) if f.lower().endswith(".jpg")]
 	)
-	cores = min(CORES, cpu_count())
-	batches = batches_distribute(cores, imgs)
-	with Pool(processes=cores) as pool:
+	workers = min(WORKERS, cpu_count())
+	batches = split_batches(workers, images)
+	with Pool(processes=workers) as pool:
 		args = [
 			(
 				batch,
 				HEIGHT_RANGE,
-				DIRS["img_resized"],
+				DIRS["image_resized"],
 				MARGIN,
 				MAX_DISTANCE,
-				DIRS["img_boxed"],
-				DIRS["img_crops"],
-				DIRS["img_deltas"],
-				DIRS["img_grouped"],
+				DIRS["image_boxed"],
+				DIRS["image_crops"],
+				DIRS["image_gaps"],
+				DIRS["image_grouped"],
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_img_detect, args).get()
-	delta_json_merge(DIRS["merges"], DIRS["img_deltas"])
+		pool.starmap_async(batch_detect_images, args).get()
+	merge_gaps_json(DIRS["merge"], DIRS["image_gaps"])

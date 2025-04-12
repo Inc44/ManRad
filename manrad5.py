@@ -1,18 +1,18 @@
+# Modify to make the silence created proportional to the possible duration of missing audio by reading the text length
+# Make the transition duration work for scroll
 from manrad0 import DIRS
-from manrad1 import batches_distribute
+from manrad1 import split_batches
 from multiprocessing import Pool, cpu_count
 import json
 import os
 import subprocess
 
-CORES = 6
 TARGET_DURATION = 1
-TRANSITION_DURATION = 0
+TRANSITION = 0
+WORKERS = 6
 
 
-# Modify to make the silence created proportional to the possible duration of missing audio by reading the text length
-# Make the transition duration work for scroll
-def silence_create(duration, filename, input_dir):
+def create_silence(duration, filename, input_dir):
 	path = os.path.join(input_dir, filename)
 	cmd = [
 		"ffmpeg",
@@ -31,7 +31,7 @@ def silence_create(duration, filename, input_dir):
 	subprocess.run(cmd)
 
 
-def silence_extend(duration, filename, input_dir):
+def extend_silence(duration, filename, input_dir):
 	path = os.path.join(input_dir, filename)
 	basename, _ = os.path.splitext(filename)
 	extended_filename = f"{basename}_extended.wav"
@@ -53,7 +53,7 @@ def silence_extend(duration, filename, input_dir):
 	os.rename(extended_path, path)
 
 
-def duration_get(filename, input_dir):
+def get_audio_duration(filename, input_dir):
 	path = os.path.join(input_dir, filename)
 	cmd = [
 		"ffprobe",
@@ -72,37 +72,37 @@ def duration_get(filename, input_dir):
 	return float(subprocess.check_output(cmd).decode().strip())
 
 
-def duration_json(basename, duration, output_dir_duration):
-	path = os.path.join(output_dir_duration, f"{basename}.json")
+def save_duration_json(basename, duration, output_dir):
+	path = os.path.join(output_dir, f"{basename}.json")
 	with open(path, "w") as f:
 		json.dump({basename: duration}, f, indent="\t", ensure_ascii=False)
 
 
-def duration_set(filename, input_dir, output_dir_duration, target_duration):
+def set_audio_duration(filename, input_dir, output_dir, target_duration):
 	path = os.path.join(input_dir, filename)
 	basename, _ = os.path.splitext(filename)
 	if os.path.exists(path) and not os.stat(path).st_size == 0:
-		duration = duration_get(filename, input_dir)
+		duration = get_audio_duration(filename, input_dir)
 		if duration < target_duration:
-			silence_extend(target_duration - duration, filename, input_dir)
+			extend_silence(target_duration - duration, filename, input_dir)
 			duration = target_duration
 	else:
-		silence_create(target_duration, filename, input_dir)
+		create_silence(target_duration, filename, input_dir)
 		duration = target_duration
-	duration_json(basename, duration, output_dir_duration)
+	save_duration_json(basename, duration, output_dir)
 
 
-def batch_duration(batch, input_dir, output_dir_duration, target_duration):
+def batch_set_audio_duration(batch, input_dir, output_dir, target_duration):
 	for filename in batch:
-		duration_set(filename, input_dir, output_dir_duration, target_duration)
+		set_audio_duration(filename, input_dir, output_dir, target_duration)
 
 
-def duration_json_merge(output_dir, output_dir_crops_durations):
+def merge_duration_json(output_dir, input_dir):
 	durations = {}
 	total = 0
-	jsons = [f for f in os.listdir(output_dir_crops_durations) if f.endswith(".json")]
-	for filename in jsons:
-		path = os.path.join(output_dir_crops_durations, filename)
+	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
+	for filename in files:
+		path = os.path.join(input_dir, filename)
 		with open(path, "r") as f:
 			duration = json.load(f)
 		for key, value in duration.items():
@@ -116,20 +116,20 @@ def duration_json_merge(output_dir, output_dir_crops_durations):
 		f.write(str(total))
 
 
-def audio_list(audios, input_dir, output_dir, transition_duration):
+def create_audio_list(audios, input_dir, output_dir, transition_duration):
 	path = os.path.join(output_dir, "audio_list.txt")
 	if transition_duration != 0:
-		silence_create(transition_duration, "0000000.wav", input_dir)
+		create_silence(transition_duration, "0000000.wav", input_dir)
 	with open(path, "w") as f:
 		for i, filename in enumerate(audios):
-			path = os.path.abspath(os.path.join(input_dir, filename))
-			f.write(f"file '{path}'\n")
+			abs_path = os.path.abspath(os.path.join(input_dir, filename))
+			f.write(f"file '{abs_path}'\n")
 			if transition_duration != 0 and i < len(audios) - 1:
-				path = os.path.abspath(os.path.join(input_dir, "0000000.wav"))
-				f.write(f"file '{path}'\n")
+				abs_path = os.path.abspath(os.path.join(input_dir, "0000000.wav"))
+				f.write(f"file '{abs_path}'\n")
 
 
-def audio_render(input_dir, render_dir):
+def render_audio(input_dir, render_dir):
 	path_input = os.path.join(input_dir, "audio_list.txt")
 	path_render = os.path.join(render_dir, "audio.opus")
 	cmd = [
@@ -158,23 +158,22 @@ def audio_render(input_dir, render_dir):
 
 
 if __name__ == "__main__":
-	# Duration, Render Audio
 	audios = sorted(
-		[f for f in os.listdir(DIRS["img_audio"]) if f.lower().endswith(".wav")]
+		[f for f in os.listdir(DIRS["image_audio"]) if f.lower().endswith(".wav")]
 	)
-	cores = min(CORES, cpu_count())
-	batches = batches_distribute(cores, audios)
-	with Pool(processes=cores) as pool:
+	workers = min(WORKERS, cpu_count())
+	batches = split_batches(workers, audios)
+	with Pool(processes=workers) as pool:
 		args = [
 			(
 				batch,
-				DIRS["img_audio"],
-				DIRS["img_durations"],
+				DIRS["image_audio"],
+				DIRS["image_durations"],
 				TARGET_DURATION,
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_duration, args).get()
-	duration_json_merge(DIRS["merges"], DIRS["img_durations"])
-	audio_list(audios, DIRS["img_audio"], DIRS["merges"], TRANSITION_DURATION)
-	audio_render(DIRS["merges"], DIRS["render"])
+		pool.starmap_async(batch_set_audio_duration, args).get()
+	merge_duration_json(DIRS["merge"], DIRS["image_durations"])
+	create_audio_list(audios, DIRS["image_audio"], DIRS["merge"], TRANSITION)
+	render_audio(DIRS["merge"], DIRS["render"])

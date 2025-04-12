@@ -3,39 +3,45 @@ from multiprocessing import Pool, cpu_count
 import cv2
 import os
 
-CORES = 6
-WIDTH = 750
+TARGET_WIDTH = 750
+WORKERS = 6
 
 
-def img_resize(filename, input_dir, output_dir):
+def resize_image(filename, input_dir, output_dir, target_width):
 	path = os.path.join(input_dir, filename)
 	image = cv2.imread(path)
-	(h, w) = image.shape[:2]
-	height = int((WIDTH / w) * h)
-	resized = cv2.resize(image, (WIDTH, height), interpolation=cv2.INTER_AREA)
-	img_resized = os.path.join(output_dir, filename)
-	cv2.imwrite(img_resized, resized)
+	if image is None:
+		return
+	height, width = image.shape[:2]
+	new_height = int((target_width / width) * height)
+	resized = cv2.resize(
+		image, (target_width, new_height), interpolation=cv2.INTER_AREA
+	)
+	output_path = os.path.join(output_dir, filename)
+	cv2.imwrite(output_path, resized)
 
 
-def batches_distribute(cores, imgs):
-	batches = [[] for _ in range(cores)]
-	for i, filename in enumerate(imgs):
-		worker = i % cores
-		batches[worker].append(filename)
+def split_batches(num_workers, items):
+	batches = [[] for _ in range(num_workers)]
+	for i, item in enumerate(items):
+		batches[i % num_workers].append(item)
 	return batches
 
 
-def batch_img_resize(args):
-	batch, input_dir, output_dir_resized = args
+def batch_resize_images(batch, input_dir, output_dir, target_width):
 	for filename in batch:
-		img_resize(filename, input_dir, output_dir_resized)
+		resize_image(filename, input_dir, output_dir, target_width)
 
 
 if __name__ == "__main__":
-	# Resize
-	imgs = sorted([f for f in os.listdir(DIRS["img"]) if f.lower().endswith(".jpg")])
-	cores = min(CORES, cpu_count())
-	batches = batches_distribute(cores, imgs)
-	with Pool(processes=cores) as pool:
-		args = [(batch, DIRS["img"], DIRS["img_resized"]) for batch in batches]
-		pool.map_async(batch_img_resize, args).get()
+	images = sorted(
+		[f for f in os.listdir(DIRS["image"]) if f.lower().endswith(".jpg")]
+	)
+	workers = min(WORKERS, cpu_count())
+	batches = split_batches(workers, images)
+	with Pool(processes=workers) as pool:
+		args = [
+			(batch, DIRS["image"], DIRS["image_resized"], TARGET_WIDTH)
+			for batch in batches
+		]
+		pool.starmap_async(batch_resize_images, args).get()
