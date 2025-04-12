@@ -5,16 +5,16 @@ import json
 import os
 import tiktoken
 
-DEEPINFRA_COST = (0.08, 0.30)
-ENCODING = "cl100k_base"
-GEMINI_COST = (0.10, 0.40)
-GROQ_COST = (0.90, 0.90)
+ENCODING_NAME = "cl100k_base"
 MAX_TOKENS = 2000
-OPENAI_COST = (5.00, 15.00)
-TTS_COST = 15.0
+COST_DEEPINFRA = (0.08, 0.30)
+COST_GEMINI = (0.10, 0.40)
+COST_GROQ = (0.90, 0.90)
+COST_OPENAI = (5.00, 15.00)
+COST_TTS = 15.0
 
 
-def get_gemini_tokens(path):
+def calculate_gemini_tokens(path):
 	img = cv2.imread(path)
 	width, height = img.shape[:2]
 	if width <= 384 and height <= 384:
@@ -25,7 +25,7 @@ def get_gemini_tokens(path):
 	return tiles_x * tiles_y * 258
 
 
-def get_openai_tokens(path, low_resolution=False):
+def calculate_openai_tokens(path, low_resolution=False):
 	if low_resolution:
 		return 85
 	img = cv2.imread(path)
@@ -44,80 +44,86 @@ if __name__ == "__main__":
 		[f for f in os.listdir(DIRS["image_text"]) if f.lower().endswith(".json")]
 	)
 	count = len(images)
-	deepinfra_input_tokens = 48 * count
-	gemini_input_tokens = 48 * count
-	groq_input_tokens = 48 * count
-	openai_input_tokens = 48 * count
+	token_count_deepinfra = 48 * count
+	token_count_gemini = 48 * count
+	token_count_groq = 48 * count
+	token_count_openai = 48 * count
 	for image in images:
 		image_path = os.path.join(DIRS["image_crops"], image)
-		deepinfra_input_tokens += 160
-		gemini_input_tokens += get_gemini_tokens(image_path)
-		groq_input_tokens += 6400
-		openai_input_tokens += get_openai_tokens(image_path)
-	combined_text = ""
+		token_count_deepinfra += 160
+		token_count_gemini += calculate_gemini_tokens(image_path)
+		token_count_groq += 6400
+		token_count_openai += calculate_openai_tokens(image_path)
+	extracted_text = ""
 	for text_file in texts:
 		text_path = os.path.join(DIRS["image_text"], text_file)
-		combined_text += parse_text_json(MAX_TOKENS, text_path)
-	input_chars = len(combined_text)
-	encoding = tiktoken.get_encoding(ENCODING)
-	output_tokens = int(len(encoding.encode(combined_text)) * 1.5)
-	data = {
+		extracted_text += parse_text_json(MAX_TOKENS, text_path)
+	character_count = len(extracted_text)
+	encoding = tiktoken.get_encoding(ENCODING_NAME)
+	output_token_count = int(len(encoding.encode(extracted_text)) * 1.5)
+	cost_data = {
 		"count": count,
 		"deepinfra": {
-			"input_tokens": deepinfra_input_tokens,
-			"output_tokens": output_tokens,
+			"input_tokens": token_count_deepinfra,
+			"output_tokens": output_token_count,
 			"input_cost": round(
-				(DEEPINFRA_COST[0] * deepinfra_input_tokens) / 1000000, 4
+				(COST_DEEPINFRA[0] * token_count_deepinfra) / 1000000, 4
 			),
-			"output_cost": round((DEEPINFRA_COST[1] * output_tokens) / 1000000, 4),
+			"output_cost": round((COST_DEEPINFRA[1] * output_token_count) / 1000000, 4),
 			"total_cost": round(
 				(
-					DEEPINFRA_COST[0] * deepinfra_input_tokens
-					+ DEEPINFRA_COST[1] * output_tokens
+					COST_DEEPINFRA[0] * token_count_deepinfra
+					+ COST_DEEPINFRA[1] * output_token_count
 				)
 				/ 1000000,
 				4,
 			),
 		},
 		"gemini": {
-			"input_tokens": gemini_input_tokens,
-			"output_tokens": output_tokens,
-			"input_cost": round((GEMINI_COST[0] * gemini_input_tokens) / 1000000, 4),
-			"output_cost": round((GEMINI_COST[1] * output_tokens) / 1000000, 4),
+			"input_tokens": token_count_gemini,
+			"output_tokens": output_token_count,
+			"input_cost": round((COST_GEMINI[0] * token_count_gemini) / 1000000, 4),
+			"output_cost": round((COST_GEMINI[1] * output_token_count) / 1000000, 4),
 			"total_cost": round(
-				(GEMINI_COST[0] * gemini_input_tokens + GEMINI_COST[1] * output_tokens)
+				(
+					COST_GEMINI[0] * token_count_gemini
+					+ COST_GEMINI[1] * output_token_count
+				)
 				/ 1000000,
 				4,
 			),
 		},
 		"groq": {
-			"input_tokens": groq_input_tokens,
-			"output_tokens": output_tokens,
-			"input_cost": round((GROQ_COST[0] * groq_input_tokens) / 1000000, 4),
-			"output_cost": round((GROQ_COST[1] * output_tokens) / 1000000, 4),
+			"input_tokens": token_count_groq,
+			"output_tokens": output_token_count,
+			"input_cost": round((COST_GROQ[0] * token_count_groq) / 1000000, 4),
+			"output_cost": round((COST_GROQ[1] * output_token_count) / 1000000, 4),
 			"total_cost": round(
-				(GROQ_COST[0] * groq_input_tokens + GROQ_COST[1] * output_tokens)
+				(COST_GROQ[0] * token_count_groq + COST_GROQ[1] * output_token_count)
 				/ 1000000,
 				4,
 			),
 		},
 		"openai": {
-			"input_tokens": openai_input_tokens,
-			"output_tokens": output_tokens,
-			"input_cost": round((OPENAI_COST[0] * openai_input_tokens) / 1000000, 4),
-			"output_cost": round((OPENAI_COST[1] * output_tokens) / 1000000, 4),
+			"input_tokens": token_count_openai,
+			"output_tokens": output_token_count,
+			"input_cost": round((COST_OPENAI[0] * token_count_openai) / 1000000, 4),
+			"output_cost": round((COST_OPENAI[1] * output_token_count) / 1000000, 4),
 			"total_cost": round(
-				(OPENAI_COST[0] * openai_input_tokens + OPENAI_COST[1] * output_tokens)
+				(
+					COST_OPENAI[0] * token_count_openai
+					+ COST_OPENAI[1] * output_token_count
+				)
 				/ 1000000,
 				4,
 			),
 		},
 		"tts": {
-			"input_chars": input_chars,
-			"input_cost": round(TTS_COST * input_chars / 1000000, 4),
+			"input_chars": character_count,
+			"input_cost": round(COST_TTS * character_count / 1000000, 4),
 		},
 	}
-	print(json.dumps(data, indent="\t", ensure_ascii=False))
+	print(json.dumps(cost_data, indent="\t", ensure_ascii=False))
 	output_path = os.path.join(DIRS["merge"], "cost.json")
 	with open(output_path, "w", encoding="utf-8") as f:
-		json.dump(data, f, indent="\t", ensure_ascii=False)
+		json.dump(cost_data, f, indent="\t", ensure_ascii=False)
