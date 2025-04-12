@@ -49,18 +49,6 @@ def natural_sort_key(s):
 	return [int(c) if c.isdigit() else c for c in re.split(r"(\d+)", s)]
 
 
-def extract_volume_chapter(path):
-	vol_num = 0
-	ch_num = 0
-	vol_match = re.search(r"vol\.?\s*(\d+)", path.lower())
-	if vol_match:
-		vol_num = int(vol_match.group(1))
-	ch_match = re.search(r"ch\.?\s*(\d+(?:\.\d+)?)", path.lower())
-	if ch_match:
-		ch_num = float(ch_match.group(1))
-	return (vol_num, ch_num, path)
-
-
 def find_source_paths(src):
 	if not os.path.isdir(src):
 		return [src]

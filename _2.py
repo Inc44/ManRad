@@ -18,7 +18,7 @@ def resize_image(filename, input_dir, output_dir, target_width):
 		image, (target_width, new_height), interpolation=cv2.INTER_AREA
 	)
 	output_path = os.path.join(output_dir, filename)
-	cv2.imwrite(output_path, resized)
+	cv2.imwrite(output_path, resized, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
 
 def split_batches(num_workers, items):
