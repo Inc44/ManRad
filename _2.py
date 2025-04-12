@@ -1,4 +1,4 @@
-from manrad0 import DIRS
+from _1 import DIRS
 from multiprocessing import Pool, cpu_count
 import cv2
 import os
