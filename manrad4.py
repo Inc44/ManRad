@@ -19,7 +19,7 @@ RETRIES = 3
 TEMPERATURE = 0.1
 
 
-def parse_json(path, max_tokens):
+def parse_json(max_tokens, path):
 	with open(path, "r", encoding="utf-8") as f:
 		data = json.load(f)
 	if isinstance(data, list):
@@ -53,9 +53,9 @@ def img_audio(
 	path = os.path.join(input_dir, filename)
 	audio_filename = f"{basename}.wav"
 	audio_path = os.path.join(output_dir_audio, audio_filename)
-	if valid_audio(audio_path, min_size):
+	if valid_audio(min_size, path):
 		return
-	text = parse_json(path, max_tokens)
+	text = parse_json(max_tokens, path)
 	if len(text) == 0:
 		return
 	with open(reference_text_path, "r", encoding="utf-8") as f:
@@ -85,7 +85,7 @@ def img_audio(
 			if response.status_code == 200:
 				with open(audio_path, "wb") as f:
 					f.write(response.content)
-				if valid_audio(audio_path, min_size):
+				if valid_audio(min_size, path):
 					return
 		except:
 			pass
@@ -94,7 +94,7 @@ def img_audio(
 			time.sleep(sleep_time)
 
 
-def valid_audio(path, min_size):
+def valid_audio(min_size, path):
 	return os.path.exists(path) and os.stat(path).st_size >= min_size
 
 

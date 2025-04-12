@@ -269,7 +269,7 @@ def delta_json_merge(output_dir, output_dir_deltas):
 	path = os.path.join(output_dir, "deltas.json")
 	with open(path, "w") as f:
 		json.dump(deltas, f, indent="\t", ensure_ascii=False)
-	path = os.path.join(output_dir, "total.txt")
+	path = os.path.join(output_dir, "total_delta.txt")
 	with open(path, "w") as f:
 		f.write(str(total))
 
@@ -297,4 +297,4 @@ if __name__ == "__main__":
 			for batch in batches
 		]
 		pool.starmap_async(batch_img_detect, args).get()
-	delta_json_merge(DIRS["output"], DIRS["img_deltas"])
+	delta_json_merge(DIRS["merges"], DIRS["img_deltas"])

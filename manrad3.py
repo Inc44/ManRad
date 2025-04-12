@@ -63,7 +63,7 @@ def img_text(
 	path = os.path.join(input_dir, filename)
 	text_filename = f"{basename}.json"
 	text_path = os.path.join(output_dir_text, text_filename)
-	if valid_json(text_path, min_size):
+	if valid_json(min_size, text_path):
 		return
 	with open(path, "rb") as f:
 		img = base64.b64encode(f.read()).decode()
@@ -86,44 +86,36 @@ def img_text(
 		"seed": 42,
 		"temperature": temperature,
 	}
-	try:
-		response = requests.post(api_endpoint, headers=headers, json=payload)
-		if response.status_code == 200:
-			content = response.json()["choices"][0]["message"]["content"]
-			start = content.find("[")
-			end = content.rfind("]") + 1
-			if start >= 0 and end > start:
-				sanitized_json = sanitized_parse_json(content[start:end])
-				if (
-					sanitized_json
-					and len(str(sanitized_json)) >= min_size
-					and isinstance(sanitized_json, list)
-					and all(isinstance(item, dict) for item in sanitized_json)
-				):
-					with open(text_path, "w", encoding="utf-8") as f:
-						json.dump(sanitized_json, f, indent="\t", ensure_ascii=False)
-					return
-	except:
-		pass
-	time.sleep(pause)
-	return img_text(
-		api_endpoint,
-		api_key,
-		attempt + 1,
-		filename,
-		input_dir,
-		max_tokens,
-		model,
-		output_dir_text,
-		pause * 2,
-		prompt,
-		retries,
-		temperature + (attempt * temperature_increase),
-		temperature_increase,
-	)
+	for attempt in range(attempt, retries):
+		try:
+			payload["temperature"] = temperature
+			response = requests.post(api_endpoint, headers=headers, json=payload)
+			if response.status_code == 200:
+				content = response.json()["choices"][0]["message"]["content"]
+				start = content.find("[")
+				end = content.rfind("]") + 1
+				if start >= 0 and end > start:
+					sanitized_json = sanitized_parse_json(content[start:end])
+					if (
+						sanitized_json
+						and len(str(sanitized_json)) >= min_size
+						and isinstance(sanitized_json, list)
+						and all(isinstance(item, dict) for item in sanitized_json)
+					):
+						with open(text_path, "w", encoding="utf-8") as f:
+							json.dump(
+								sanitized_json, f, indent="\t", ensure_ascii=False
+							)
+						return
+		except:
+			pass
+		if attempt < retries - 1:
+			sleep_time = pause * (2**attempt)
+			temperature += temperature_increase
+			time.sleep(sleep_time)
 
 
-def valid_json(path, min_size):
+def valid_json(min_size, path):
 	if not os.path.exists(path) or os.stat(path).st_size < min_size:
 		return False
 	try:
