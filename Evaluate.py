@@ -1,69 +1,82 @@
-from PIL import Image
-import glob
+from _1 import DIRS
+from _5 import parse_text_json
+import cv2
 import json
-import math
 import os
-import sys
 import tiktoken
 
+DEEPINFRA_COST = (0.08, 0.30)
+ENCODING = "cl100k_base"
+GEMINI_COST = (0.10, 0.40)
+GROQ_COST = (0.90, 0.90)
+MAX_TOKENS = 2000
+OPENAI_COST = (5.00, 15.00)
+TTS_COST = 15.0
 
-def calc_img_tokens(img_path):
-	img = Image.open(img_path)
-	width, height = img.size
+
+def get_deepinfra_tokens():
+	return 160
+
+
+def get_gemini_tokens(path):
+	img = cv2.imread(path)
+	width, height = img.shape[:2]
 	if width <= 384 and height <= 384:
 		return 258
 	tile_size = 768
-	tiles_x = math.ceil(width / tile_size)
-	tiles_y = math.ceil(height / tile_size)
+	tiles_x = -(-width // tile_size)
+	tiles_y = -(-height // tile_size)
 	return tiles_x * tiles_y * 258
 
 
-def count_img_data(base_path):
-	img_exts = ["jpg"]
-	img_files = []
-	for ext in img_exts:
-		img_files.extend(
-			glob.glob(os.path.join(base_path, "**", f"*.{ext}"), recursive=True)
-		)
-	img_count = len(img_files)
-	token_sum = sum(calc_img_tokens(img) for img in img_files)
-	cost = round((0.10 * token_sum) / 1000000, 2)
-	return {"img_count": img_count, "token_count": token_sum, "cost": cost}
+def get_groq_tokens():
+	return 6400
 
 
-def count_txt_data(base_path):
-	json_files = glob.glob(os.path.join(base_path, "**", "*.json"), recursive=True)
-	file_count = len(json_files)
-	texts = []
-	for json_path in json_files:
-		try:
-			with open(json_path, "r", encoding="utf-8") as f:
-				data = json.load(f)
-		except json.JSONDecodeError:
-			print(f"Skipping {json_path}")
-			continue
-		for item in data:
-			if isinstance(item, dict) and "text" in item and item["text"] is not None:
-				texts.append(item["text"])
-	combined_text = " ".join(texts)
-	encoding = tiktoken.get_encoding("cl100k_base")
-	token_count = len(encoding.encode(combined_text))
-	cost = round((15.0 * token_count) / 1000000, 2)
-	return {
-		"file_count": file_count,
-		"text_len": len(combined_text),
-		"token_count": token_count,
-		"cost": cost,
-	}
-
-
-def analyze_dir(dir_path):
-	img_path = os.path.join(dir_path, "crops")
-	txt_path = os.path.join(dir_path, "json")
-	return {"gemini": count_img_data(img_path), "openai_tts": count_txt_data(txt_path)}
+def get_openai_tokens(path, low_resolution=False):
+	if low_resolution:
+		return 85
+	img = cv2.imread(path)
+	width, height = img.shape[:2]
+	tile_size = 512
+	tiles_x = -(-width // tile_size)
+	tiles_y = -(-height // tile_size)
+	return tiles_x * tiles_y * 170 + 85
 
 
 if __name__ == "__main__":
-	if len(sys.argv) > 1:
-		result = analyze_dir(sys.argv[1])
-		print(json.dumps(result, indent="\t", ensure_ascii=False))
+	images = sorted(
+		[f for f in os.listdir(DIRS["image_crops"]) if f.lower().endswith(".jpg")]
+	)
+	texts = sorted(
+		[f for f in os.listdir(DIRS["image_text"]) if f.lower().endswith(".json")]
+	)
+	count = len(images)
+	input_tokens = 50 * count
+	for image in images:
+		image_path = os.path.join(DIRS["image_crops"], image)
+		input_tokens += get_gemini_tokens(image_path)
+	combined_text = ""
+	for text_file in texts:
+		text_path = os.path.join(DIRS["image_text"], text_file)
+		combined_text += parse_text_json(MAX_TOKENS, text_path)
+	input_chars = len(combined_text)
+	encoding = tiktoken.get_encoding(ENCODING)
+	output_tokens = int(len(encoding.encode(combined_text)) * 1.5)
+	data = {
+		"count": count,
+		"llm": {
+			"input_tokens": input_tokens,
+			"output_tokens": output_tokens,
+			"input_cost": round((GEMINI_COST[0] * input_tokens) / 1000000, 4),
+			"output_cost": round((GEMINI_COST[1] * output_tokens) / 1000000, 4),
+		},
+		"tts": {
+			"input_chars": input_chars,
+			"input_cost": round(TTS_COST * input_chars / 1000000, 4),
+		},
+	}
+	print(json.dumps(data, indent="\t", ensure_ascii=False))
+	output_path = os.path.join(DIRS["merge"], "cost.json")
+	with open(output_path, "w", encoding="utf-8") as f:
+		json.dump(data, f, indent="\t", ensure_ascii=False)
