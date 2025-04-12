@@ -14,10 +14,6 @@ OPENAI_COST = (5.00, 15.00)
 TTS_COST = 15.0
 
 
-def get_deepinfra_tokens():
-	return 160
-
-
 def get_gemini_tokens(path):
 	img = cv2.imread(path)
 	width, height = img.shape[:2]
@@ -27,10 +23,6 @@ def get_gemini_tokens(path):
 	tiles_x = -(-width // tile_size)
 	tiles_y = -(-height // tile_size)
 	return tiles_x * tiles_y * 258
-
-
-def get_groq_tokens():
-	return 6400
 
 
 def get_openai_tokens(path, low_resolution=False):
@@ -52,10 +44,16 @@ if __name__ == "__main__":
 		[f for f in os.listdir(DIRS["image_text"]) if f.lower().endswith(".json")]
 	)
 	count = len(images)
-	input_tokens = 50 * count
+	deepinfra_input_tokens = 48 * count
+	gemini_input_tokens = 48 * count
+	groq_input_tokens = 48 * count
+	openai_input_tokens = 48 * count
 	for image in images:
 		image_path = os.path.join(DIRS["image_crops"], image)
-		input_tokens += get_gemini_tokens(image_path)
+		deepinfra_input_tokens += 160
+		gemini_input_tokens += get_gemini_tokens(image_path)
+		groq_input_tokens += 6400
+		openai_input_tokens += get_openai_tokens(image_path)
 	combined_text = ""
 	for text_file in texts:
 		text_path = os.path.join(DIRS["image_text"], text_file)
@@ -65,11 +63,54 @@ if __name__ == "__main__":
 	output_tokens = int(len(encoding.encode(combined_text)) * 1.5)
 	data = {
 		"count": count,
-		"llm": {
-			"input_tokens": input_tokens,
+		"deepinfra": {
+			"input_tokens": deepinfra_input_tokens,
 			"output_tokens": output_tokens,
-			"input_cost": round((GEMINI_COST[0] * input_tokens) / 1000000, 4),
+			"input_cost": round(
+				(DEEPINFRA_COST[0] * deepinfra_input_tokens) / 1000000, 4
+			),
+			"output_cost": round((DEEPINFRA_COST[1] * output_tokens) / 1000000, 4),
+			"total_cost": round(
+				(
+					DEEPINFRA_COST[0] * deepinfra_input_tokens
+					+ DEEPINFRA_COST[1] * output_tokens
+				)
+				/ 1000000,
+				4,
+			),
+		},
+		"gemini": {
+			"input_tokens": gemini_input_tokens,
+			"output_tokens": output_tokens,
+			"input_cost": round((GEMINI_COST[0] * gemini_input_tokens) / 1000000, 4),
 			"output_cost": round((GEMINI_COST[1] * output_tokens) / 1000000, 4),
+			"total_cost": round(
+				(GEMINI_COST[0] * gemini_input_tokens + GEMINI_COST[1] * output_tokens)
+				/ 1000000,
+				4,
+			),
+		},
+		"groq": {
+			"input_tokens": groq_input_tokens,
+			"output_tokens": output_tokens,
+			"input_cost": round((GROQ_COST[0] * groq_input_tokens) / 1000000, 4),
+			"output_cost": round((GROQ_COST[1] * output_tokens) / 1000000, 4),
+			"total_cost": round(
+				(GROQ_COST[0] * groq_input_tokens + GROQ_COST[1] * output_tokens)
+				/ 1000000,
+				4,
+			),
+		},
+		"openai": {
+			"input_tokens": openai_input_tokens,
+			"output_tokens": output_tokens,
+			"input_cost": round((OPENAI_COST[0] * openai_input_tokens) / 1000000, 4),
+			"output_cost": round((OPENAI_COST[1] * output_tokens) / 1000000, 4),
+			"total_cost": round(
+				(OPENAI_COST[0] * openai_input_tokens + OPENAI_COST[1] * output_tokens)
+				/ 1000000,
+				4,
+			),
 		},
 		"tts": {
 			"input_chars": input_chars,
