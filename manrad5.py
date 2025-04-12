@@ -12,8 +12,6 @@ TRANSITION_DURATION = 0
 
 # Modify to make the silence created proportional to the possible duration of missing audio by reading the text length
 # Make the transition duration work for scroll
-
-
 def silence_create(duration, filename, input_dir):
 	path = os.path.join(input_dir, filename)
 	cmd = [
@@ -56,13 +54,14 @@ def silence_extend(duration, filename, input_dir):
 
 
 def duration_get(filename, input_dir):
+	path = os.path.join(input_dir, filename)
 	cmd = [
 		"ffprobe",
 		"-hide_banner",
 		"-loglevel",
 		"error",
 		"-i",
-		f"{input_dir}/{filename}",
+		path,
 		"-show_entries",
 		"format=duration",
 		"-v",
@@ -81,23 +80,23 @@ def audio_json(basename, duration, output_dir_audio):
 		json.dump(audio, f, indent="\t", ensure_ascii=False)
 
 
-def duration_set(filename, input_dir, output_dir_audio, render_dir, target_duration):
+def duration_set(filename, input_dir, output_dir_audio, target_duration):
 	path = os.path.join(input_dir, filename)
 	basename, _ = os.path.splitext(filename)
 	if os.path.exists(path) and not os.stat(path).st_size == 0:
 		duration = duration_get(filename, input_dir)
 		if duration < target_duration:
-			silence_extend(duration, filename, input_dir)
+			silence_extend(target_duration - duration, filename, input_dir)
 			duration = target_duration
 	else:
-		silence_create(duration, filename, render_dir)
+		silence_create(target_duration, filename, input_dir)
 		duration = target_duration
 	audio_json(basename, duration, output_dir_audio)
 
 
-def batch_duration(batch, input_dir, output_dir_audio, render_dir, target_duration):
+def batch_duration(batch, input_dir, output_dir_audio, target_duration):
 	for filename in batch:
-		duration_set(filename, input_dir, output_dir_audio, render_dir, target_duration)
+		duration_set(filename, input_dir, output_dir_audio, target_duration)
 
 
 def audio_json_merge(output_dir, output_dir_crops_durations):
@@ -121,12 +120,13 @@ def audio_json_merge(output_dir, output_dir_crops_durations):
 
 def audio_list(audios, input_dir, output_dir, transition_duration):
 	path = os.path.join(output_dir, "audio_list.txt")
+	if transition_duration != 0:
+		silence_create(transition_duration, "0000000.wav", input_dir)
 	with open(path, "w") as f:
 		for i, filename in enumerate(audios):
 			path = os.path.join(input_dir, filename)
 			f.write(f"file '{path}'\n")
 			if transition_duration != 0 and i < len(audios) - 1:
-				silence_create(transition_duration, filename, input_dir)
 				path = os.path.join(input_dir, "0000000.wav")
 				f.write(f"file '{path}'\n")
 
@@ -171,8 +171,7 @@ if __name__ == "__main__":
 			(
 				batch,
 				DIRS["img_audio"],
-				DIRS["img_audio"],
-				DIRS["render"],
+				DIRS["img_crops_durations"],
 				TARGET_DURATION,
 			)
 			for batch in batches
