@@ -1,8 +1,0 @@
-# conda create --name manrad python=3.10 -y
-# conda activate manrad
-# conda install paddlepaddle-gpu==3.0.0b1 paddlepaddle-cuda=12.3 -c paddle -c nvidia -y
-# conda install ipykernel --update-deps --force-reinstall -y
-! pip install opencv-python
-! pip install paddleocr
-! pip install regex
-! pip install tiktoken
