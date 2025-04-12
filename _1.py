@@ -12,6 +12,7 @@ DIRS = {
 	"image_text": "image_text",
 	"merge": "merge",
 	"render": "render",
+	"temp": "temp",
 }
 
 

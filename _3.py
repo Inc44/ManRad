@@ -105,15 +105,15 @@ def order_boxes(bounds, centers, width):
 	return order
 
 
-def draw_boxes(bounds, img, order):
-	img_copy = img.copy()
+def draw_boxes(bounds, image, order):
+	image_copy = image.copy()
 	for i, box in enumerate(order):
 		x_min, y_min, x_max, y_max = bounds[box]
 		x_min, y_min, x_max, y_max = int(x_min), int(y_min), int(x_max), int(y_max)
 		red = (0, 0, 255)
-		cv2.rectangle(img_copy, (x_min, y_min), (x_max, y_max), red, 1)
+		cv2.rectangle(image_copy, (x_min, y_min), (x_max, y_max), red, 1)
 		cv2.putText(
-			img_copy,
+			image_copy,
 			str(i + 1),
 			(x_min + 4, y_min + 16),
 			cv2.FONT_HERSHEY_PLAIN,
@@ -121,18 +121,18 @@ def draw_boxes(bounds, img, order):
 			red,
 			1,
 		)
-	return img_copy
+	return image_copy
 
 
-def crop_images(basename, bounds, img, order, output_dir):
-	height, width = img.shape[:2]
+def crop_images(basename, bounds, image, order, output_dir):
+	height, width = image.shape[:2]
 	for i, box in enumerate(order):
 		x_min, y_min, x_max, y_max = bounds[box]
 		x_min = max(0, int(x_min))
 		y_min = max(0, int(y_min))
 		x_max = min(width, int(x_max))
 		y_max = min(height, int(y_max))
-		crop = img[y_min:y_max, x_min:x_max]
+		crop = image[y_min:y_max, x_min:x_max]
 		filename = f"{basename}{i+1:03d}.jpg"
 		path = os.path.join(output_dir, filename)
 		cv2.imwrite(path, crop, [cv2.IMWRITE_JPEG_QUALITY, 100])
@@ -204,20 +204,20 @@ def detect_image(
 	if not ocrs or len(ocrs) == 0 or not ocrs[0]:
 		return
 	boxes = [item[0] for item in ocrs[0]]
-	img = cv2.imread(path)
-	img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-	img_box = draw_ocr(img_rgb, boxes)
-	img_box = cv2.cvtColor(img_box, cv2.COLOR_RGB2BGR)
+	image = cv2.imread(path)
+	image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+	image_box = draw_ocr(image_rgb, boxes)
+	image_box = cv2.cvtColor(image_box, cv2.COLOR_RGB2BGR)
 	path_box = os.path.join(output_dir_box, os.path.basename(path))
-	cv2.imwrite(path_box, img_box, [cv2.IMWRITE_JPEG_QUALITY, 100])
+	cv2.imwrite(path_box, image_box, [cv2.IMWRITE_JPEG_QUALITY, 100])
 	groups = group_boxes(boxes, max_distance)
 	bounds, centers = get_bounds_and_centers(boxes, groups, margin)
-	order = order_boxes(bounds, centers, img.shape[1])
-	img_group = draw_boxes(bounds, img, order)
+	order = order_boxes(bounds, centers, image.shape[1])
+	image_group = draw_boxes(bounds, image, order)
 	path_group = os.path.join(output_dir_group, os.path.basename(path))
-	cv2.imwrite(path_group, img_group, [cv2.IMWRITE_JPEG_QUALITY, 100])
-	crop_images(basename, bounds, img, order, output_dir_crops)
-	gaps = get_gaps(bounds, img.shape[0], height_range, order)
+	cv2.imwrite(path_group, image_group, [cv2.IMWRITE_JPEG_QUALITY, 100])
+	crop_images(basename, bounds, image, order, output_dir_crops)
+	gaps = get_gaps(bounds, image.shape[0], height_range, order)
 	save_gaps_json(basename, gaps, output_dir_gaps)
 
 

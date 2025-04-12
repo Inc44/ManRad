@@ -15,8 +15,8 @@ COST_TTS = 15.0
 
 
 def calculate_gemini_tokens(path):
-	img = cv2.imread(path)
-	width, height = img.shape[:2]
+	image = cv2.imread(path)
+	width, height = image.shape[:2]
 	if width <= 384 and height <= 384:
 		return 258
 	tile_size = 768
@@ -28,8 +28,8 @@ def calculate_gemini_tokens(path):
 def calculate_openai_tokens(path, low_resolution=False):
 	if low_resolution:
 		return 85
-	img = cv2.imread(path)
-	width, height = img.shape[:2]
+	image = cv2.imread(path)
+	width, height = image.shape[:2]
 	tile_size = 512
 	tiles_x = -(-width // tile_size)
 	tiles_y = -(-height // tile_size)

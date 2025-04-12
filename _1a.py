@@ -1,192 +1,112 @@
+from _1 import DIRS
 import os
-import stat
-import zipfile
-import shutil
 import regex
-from pathlib import Path
+import shutil
+import zipfile
 
-SOURCE_FILE_OR_DIRECTORY_PATHS = [
+SOURCES = [
+	"Kage_no_Jitsuryokusha_ni_Naritakute_",  # Kotatsu CBZ or DIR
 	"Kage_no_Jitsuryokusha_ni_Naritakute_.zip",  # Kotatsu ZIP
-	"Kage_no_Jitsuryokusha_ni_Naritakute_",  # Kotatsu CBZ/DIR
-	"The Eminence in Shadow_001",  # HakuNeko Images (Dir of Dirs)
-	"The Eminence in Shadow_002",  # HakuNeko CBZ (Dir of CBZs)
+	"The Eminence in Shadow_001",  # HakuNeko Images
+	"The Eminence in Shadow_002",  # HakuNeko CBZ
 ]
-SELECTED_SOURCE_INDEX = 3
-TARGET_DIRECTORY_NAME = "images_1"
-ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-ALLOWED_ARCHIVE_EXTENSIONS = {".zip", ".cbz"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+ARCHIVE_EXTS = {".cbz", ".zip"}
 
 
-def get_natural_sort_key(item_name_string):
-	item_name_string = str(item_name_string).lower()
+def natural_sort(text):
+	text = str(text).lower()
 	return [
-		int(c) if c.isdigit() else c for c in regex.split(r"(\d+)", item_name_string)
+		int(part) if part.isdigit() else part for part in regex.split(r"(\d+)", text)
 	]
 
 
-def file_is_image(file_path_object):
-	return file_path_object.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
+def extract_zip(zip_path, output_dir, prefix_index):
+	if not zipfile.is_zipfile(zip_path):
+		return
+	with zipfile.ZipFile(zip_path, "r") as f:
+		for file_info in f.infolist():
+			original_name = os.path.basename(file_info.filename)
+			new_name = f"{prefix_index:04d}_{original_name}"
+			output_path = os.path.join(output_dir, new_name)
+			file_data = f.read(file_info.filename)
+			with open(output_path, "wb") as f:
+				f.write(file_data)
 
 
-def file_is_archive(file_path_object):
-	return file_path_object.suffix.lower() in ALLOWED_ARCHIVE_EXTENSIONS
+def copy_images_from_folder(source_folder, dest_folder, prefix_index):
+	images = [
+		file
+		for file in os.listdir(source_folder)
+		if os.path.isfile(os.path.join(source_folder, file))
+		and os.path.splitext(file)[1].lower() in IMAGE_EXTS
+		and not file.startswith(".")
+	]
+	for image in sorted(images, key=natural_sort):
+		new_name = f"{prefix_index:04d}_{image}"
+		new_path = os.path.join(dest_folder, new_name)
+		shutil.copy2(os.path.join(source_folder, image), new_path)
 
 
-def remove_directory_recursive(directory_path_object):
-	def handle_remove_error(func, path_str, exc_info):
-		path_object = Path(path_str)
-		can_write = os.access(path_object, os.W_OK)
-		if not can_write:
-			os.chmod(path_object, stat.S_IWUSR)
-			if path_object.is_file():
-				os.remove(path_object)
-			elif path_object.is_dir():
-				os.rmdir(path_object)
-
-	if directory_path_object.exists():
-		shutil.rmtree(
-			directory_path_object, ignore_errors=False, onerror=handle_remove_error
-		)
-
-
-def prepare_directory(directory_path_object):
-	directory_path_object.mkdir(parents=True, exist_ok=True)
-	return directory_path_object.exists()
-
-
-def extract_archive_members_to_work_area(archive_path, work_area_path, archive_index):
-	if not zipfile.is_zipfile(archive_path):
-		return False
-	all_extracted = True
-	zip_object = zipfile.ZipFile(archive_path, "r")
-	for member_info in zip_object.infolist():
-		is_directory = member_info.is_dir()
-		is_system_file = member_info.filename.startswith(("__MACOSX", "."))
-		if not is_directory and not is_system_file:
-			original_file_name = Path(member_info.filename).name
-			if not original_file_name:
-				continue
-			unique_temp_name = f"{archive_index:04d}_{original_file_name}"
-			target_file_path = work_area_path / unique_temp_name
-			member_data = zip_object.read(member_info.filename)
-			bytes_written = target_file_path.write_bytes(member_data)
-			if bytes_written != len(member_data):
-				all_extracted = False
-	zip_object.close()
-	return all_extracted
-
-
-def copy_directory_images_to_work_area(
-	source_subdir_path, work_area_path, subdir_index
-):
-	all_copied = True
-	image_files = []
-	for item in source_subdir_path.iterdir():
-		is_valid_file = (
-			item.is_file() and file_is_image(item) and not item.name.startswith(".")
-		)
-		if is_valid_file:
-			image_files.append(item)
-	sorted_image_files = sorted(image_files, key=get_natural_sort_key)
-	for img_file in sorted_image_files:
-		unique_temp_name = f"{subdir_index:04d}_{img_file.name}"
-		target_file_path = work_area_path / unique_temp_name
-		result_path = shutil.copy2(img_file, target_file_path)
-		if not Path(result_path).exists():
-			all_copied = False
-	return all_copied
-
-
-def process_selected_source(source_path_string, target_dir_name_string):
-	source_location = Path(source_path_string).resolve()
-	target_directory = Path(target_dir_name_string).resolve()
-	temporary_work_area = target_directory / "temp_work"
-	if not source_location.exists():
-		return False
-	if not os.access(source_location, os.R_OK):
-		return False
-	target_parent = target_directory.parent
-	if not os.access(target_parent, os.W_OK):
-		return False
-	remove_directory_recursive(temporary_work_area)
-	if not prepare_directory(target_directory):
-		return False
-	if not prepare_directory(temporary_work_area):
-		return False
-	collection_success = True
-	if source_location.is_file() and file_is_archive(source_location):
-		collection_success = extract_archive_members_to_work_area(
-			source_location, temporary_work_area, 0
-		)
-	elif source_location.is_dir():
-		all_items = list(source_location.iterdir())
+if __name__ == "__main__":
+	source = SOURCES[0]
+	output_folder = DIRS["image"]
+	temp_folder = DIRS["temp"]
+	if os.path.isfile(source) and os.path.splitext(source)[1].lower() in ARCHIVE_EXTS:
+		extract_zip(source, temp_folder, 0)
+	elif os.path.isdir(source):
+		items = os.listdir(source)
 		archive_files = sorted(
-			[item for item in all_items if item.is_file() and file_is_archive(item)],
-			key=get_natural_sort_key,
-		)
-		subdirectories = sorted(
-			[item for item in all_items if item.is_dir()], key=get_natural_sort_key
-		)
-		loose_image_files = sorted(
 			[
-				item
-				for item in all_items
-				if item.is_file()
-				and file_is_image(item)
-				and not file_is_archive(item)
-				and not item.name.startswith(".")
+				f
+				for f in items
+				if os.path.isfile(os.path.join(source, f))
+				and os.path.splitext(f)[1].lower() in ARCHIVE_EXTS
 			],
-			key=get_natural_sort_key,
+			key=natural_sort,
+		)
+		subfolders = sorted(
+			[f for f in items if os.path.isdir(os.path.join(source, f))],
+			key=natural_sort,
+		)
+		image_files = sorted(
+			[
+				f
+				for f in items
+				if os.path.isfile(os.path.join(source, f))
+				and os.path.splitext(f)[1].lower() in IMAGE_EXTS
+				and not f.startswith(".")
+			],
+			key=natural_sort,
 		)
 		if archive_files:
-			for index, archive_path in enumerate(archive_files):
-				if not extract_archive_members_to_work_area(
-					archive_path, temporary_work_area, index
-				):
-					collection_success = False
-		elif subdirectories:
-			for index, subdir_path in enumerate(subdirectories):
-				if not os.access(subdir_path, os.R_OK):
-					collection_success = False
+			for idx, archive in enumerate(archive_files):
+				extract_zip(os.path.join(source, archive), temp_folder, idx)
+		elif subfolders:
+			for idx, folder in enumerate(subfolders):
+				folder_path = os.path.join(source, folder)
+				if not os.access(folder_path, os.R_OK):
 					continue
-				if not copy_directory_images_to_work_area(
-					subdir_path, temporary_work_area, index
-				):
-					collection_success = False
-		elif loose_image_files:
-			if not copy_directory_images_to_work_area(
-				source_location, temporary_work_area, 0
-			):
-				collection_success = False
-		else:
-			collection_success = False
-	else:
-		collection_success = False
-	if not collection_success:
-		remove_directory_recursive(temporary_work_area)
-		return False
-	temp_files = list(temporary_work_area.glob("*"))
-	image_files_in_work_area = sorted(
-		[f for f in temp_files if f.is_file() and file_is_image(f)],
-		key=get_natural_sort_key,
-	)
-	move_success = True
-	image_counter = 1
-	for current_temp_path in image_files_in_work_area:
-		file_extension = current_temp_path.suffix.lower()
-		new_target_name = f"{image_counter:04d}{file_extension}"
-		final_target_path = target_directory / new_target_name
-		if final_target_path.exists():
-			move_success = False
+				copy_images_from_folder(folder_path, temp_folder, idx)
+		elif image_files:
+			copy_images_from_folder(source, temp_folder, 0)
+	temp_images = []
+	for file in os.listdir(temp_folder):
+		file_path = os.path.join(temp_folder, file)
+		if (
+			os.path.isfile(file_path)
+			and os.path.splitext(file)[1].lower() in IMAGE_EXTS
+		):
+			temp_images.append(file)
+	temp_images = sorted(temp_images, key=natural_sort)
+	image_number = 1
+	for temp_image in temp_images:
+		image_path = os.path.join(temp_folder, temp_image)
+		ext = os.path.splitext(temp_image)[1].lower()
+		new_filename = f"{image_number:04d}{ext}"
+		dest_path = os.path.join(output_folder, new_filename)
+		if os.path.exists(dest_path):
 			continue
-		shutil.move(str(current_temp_path), str(final_target_path))
-		if not final_target_path.exists():
-			move_success = False
-		else:
-			image_counter = image_counter + 1
-	remove_directory_recursive(temporary_work_area)
-	return collection_success and move_success
-
-
-selected_source_path = SOURCE_FILE_OR_DIRECTORY_PATHS[SELECTED_SOURCE_INDEX]
-processing_result = process_selected_source(selected_source_path, TARGET_DIRECTORY_NAME)
+		shutil.move(image_path, dest_path)
+		if os.path.exists(dest_path):
+			image_number += 1

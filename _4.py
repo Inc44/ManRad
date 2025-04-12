@@ -77,7 +77,7 @@ def image_to_text(
 	if is_valid_json(min_size, text_path):
 		return
 	with open(path, "rb") as f:
-		img = base64.b64encode(f.read()).decode()
+		image = base64.b64encode(f.read()).decode()
 	headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 	payload = {
 		"max_tokens": max_tokens,
@@ -89,7 +89,7 @@ def image_to_text(
 					{"type": "text", "text": prompt},
 					{
 						"type": "image_url",
-						"image_url": {"url": f"data:image/jpeg;base64,{img}"},
+						"image_url": {"url": f"data:image/jpeg;base64,{image}"},
 					},
 				],
 			}
