@@ -25,15 +25,19 @@ MAX_TOKENS = 2000
 MIN_SIZE = 78
 MODELS = [
 	"gpt-4o-mini-tts",  # OpenAI
-	"tts-1",  # OpenAI, Kokoro, Lemon
+	"tts-1",  # Kokoro, Lemon, OpenAI
 	"tts-1-hd",  # OpenAI
 ]
 PAUSE = 10
+RESPONSE_FORMAT = [
+	"mp3",  # OpenAI
+	"wav",  # Kokoro, Lemon, OpenAI
+]
 RETRIES = 3
 VOICES = [
 	"am_onyx",  # Kokoro
 	"ash",  # OpenAI
-	"onyx",  # OpenAI, Lemon
+	"onyx",  # Lemon, OpenAI
 	"sage",  # OpenAI
 ]
 WORKERS = 6
@@ -51,6 +55,7 @@ def text_to_audio(
 	model,
 	output_dir,
 	pause,
+	response_format,
 	retries,
 	voice,
 ):
@@ -68,7 +73,7 @@ def text_to_audio(
 		"model": model,
 		"input": text,
 		"voice": voice,
-		"response_format": "wav",
+		"response_format": response_format,
 	}
 	if instructions:
 		payload["instructions"] = instructions
@@ -100,6 +105,7 @@ def batch_text_to_audio(
 	output_dir,
 	pause,
 	retries,
+	response_format,
 	voice,
 ):
 	for filename in batch:
@@ -116,6 +122,7 @@ def batch_text_to_audio(
 			output_dir,
 			pause,
 			retries,
+			response_format,
 			voice,
 		)
 
@@ -140,6 +147,7 @@ if __name__ == "__main__":
 				MODELS[1],
 				DIRS["image_audio"],
 				PAUSE,
+				RESPONSE_FORMAT,
 				RETRIES,
 				VOICES[3],
 			)
