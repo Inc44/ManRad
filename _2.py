@@ -5,7 +5,7 @@ import os
 import shutil
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-TARGET_WIDTH = 750
+TARGET_WIDTH = 900
 WORKERS = 6
 
 

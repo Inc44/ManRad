@@ -1,5 +1,6 @@
 # Modify to make the silence created proportional to the possible duration of missing audio by reading the text length
 # Make the transition duration work for scroll
+# Fix missing audio
 from _0 import DIRS
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
@@ -69,7 +70,10 @@ def get_audio_duration(filename, input_dir):
 		"-of",
 		"csv=p=0",
 	]
-	return float(subprocess.check_output(cmd).decode().strip())
+	try:
+		return float(subprocess.check_output(cmd).decode().strip())
+	except:
+		return 0
 
 
 def save_duration_json(basename, duration, output_dir):
