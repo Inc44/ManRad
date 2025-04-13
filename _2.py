@@ -2,6 +2,7 @@ from _0 import DIRS
 from multiprocessing import Pool, cpu_count
 import cv2
 import os
+import shutil
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 TARGET_WIDTH = 750
@@ -14,14 +15,17 @@ def resize_image(filename, input_dir, output_dir, target_width):
 	if image is None:
 		return
 	height, width = image.shape[:2]
-	new_height = int((target_width / width) * height)
-	resized = cv2.resize(
-		image, (target_width, new_height), interpolation=cv2.INTER_AREA
-	)
 	basename = os.path.splitext(filename)[0]
-	filename = f"{basename}.jpg"
-	output_path = os.path.join(output_dir, filename)
-	cv2.imwrite(output_path, resized, [cv2.IMWRITE_JPEG_QUALITY, 100])
+	output_path = os.path.join(output_dir, f"{basename}.jpg")
+	if width == target_width and filename.lower().endswith((".jpg", ".jpeg")):
+		shutil.copy(path, output_path)
+		return
+	if width != target_width:
+		new_height = int((target_width / width) * height)
+		image = cv2.resize(
+			image, (target_width, new_height), interpolation=cv2.INTER_AREA
+		)
+	cv2.imwrite(output_path, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
 
 def split_batches(num_workers, items):
