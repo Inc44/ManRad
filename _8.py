@@ -1,6 +1,6 @@
 # Modify to make the silence created proportional to the possible duration of missing audio by reading the text length
 # Make the transition duration work for scroll
-from _1 import DIRS
+from _0 import DIRS
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import json

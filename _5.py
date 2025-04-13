@@ -1,4 +1,4 @@
-from _1 import DIRS
+from _0 import DIRS
 from _6 import parse_text_json
 import cv2
 import json

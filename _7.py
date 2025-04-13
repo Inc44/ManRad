@@ -1,4 +1,4 @@
-from _1 import DIRS
+from _0 import DIRS
 from _2 import split_batches
 from _6 import is_valid_audio, parse_text_json
 from multiprocessing import Pool, cpu_count

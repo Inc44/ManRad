@@ -1,4 +1,4 @@
-from _1 import DIRS
+from _0 import DIRS
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 from paddleocr import PaddleOCR, draw_ocr
