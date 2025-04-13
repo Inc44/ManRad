@@ -3,6 +3,7 @@ import os
 DIRS = {
 	"image": "image",
 	"image_audio": "image_audio",
+	"image_audio_resized": "image_audio_resized",
 	"image_boxed": "image_boxed",
 	"image_crops": "image_crops",
 	"image_durations": "image_durations",

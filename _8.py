@@ -136,8 +136,8 @@ if __name__ == "__main__":
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINTS[3],
-				API_KEYS[3],
+				API_ENDPOINTS[2],
+				API_KEYS[2],
 				0,
 				batch,
 				DIRS["image_text"],
@@ -147,7 +147,7 @@ if __name__ == "__main__":
 				MODELS[1],
 				DIRS["image_audio"],
 				PAUSE,
-				RESPONSE_FORMAT,
+				RESPONSE_FORMAT[0],
 				RETRIES,
 				VOICES[3],
 			)

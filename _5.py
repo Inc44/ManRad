@@ -10,7 +10,7 @@ import time
 
 API_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 API_KEY = os.environ.get("DEEPINFRA_API_KEY")
-LANGUAGE = "Russian"
+LANGUAGE = "English"
 MAX_TOKENS = 2000
 MIN_SIZE = 13
 MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"

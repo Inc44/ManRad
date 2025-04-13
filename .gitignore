@@ -13,3 +13,15 @@
 **/*.zip
 _test/tts/checkpoints*/**
 _test/tts/openvoice/**
+image/**/*
+image_audio/**/*
+image_boxed/**/*
+image_crops/**/*
+image_durations/**/*
+image_gaps/**/*
+image_grouped/**/*
+image_resized/**/*
+image_text/**/*
+merge/**/*
+render/**/*
+temp/**/*
