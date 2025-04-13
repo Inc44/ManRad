@@ -1,179 +1,156 @@
-# Modify to make the silence created proportional to the possible duration of missing audio by reading the text length
-# Make the transition duration work for scroll
 from _0 import DIRS
 from _2 import split_batches
+from _7 import is_valid_audio, parse_text_json
 from multiprocessing import Pool, cpu_count
-import json
 import os
-import subprocess
+import requests
+import time
 
-TARGET_DURATION = 1
-TRANSITION = 0
+API_ENDPOINTS = [
+	"http://localhost:8880/v1/audio/speech",  # Kokoro
+	"https://api.lemonfox.ai/v1/audio/speech",  # Lemon
+	"https://api.openai.com/v1/audio/speech",  # OpenAI
+]
+API_KEYS = [
+	"not-needed",  # Kokoro
+	os.environ.get("LEMON_API_KEY"),  # Lemon
+	os.environ.get("OPENAI_API_KEY"),  # OpenAI
+]
+INSTRUCTIONS = [
+	"",
+	"Speak in an emotive and friendly tone... Read only if the text is in Russian",
+	"Speak with intonation and emotions in the given sentences from the intense manga.",
+]
+MAX_TOKENS = 2000
+MIN_SIZE = 78
+MODELS = [
+	"gpt-4o-mini-tts",  # OpenAI
+	"tts-1",  # Kokoro, Lemon, OpenAI
+	"tts-1-hd",  # OpenAI
+]
+PAUSE = 10
+RESPONSE_FORMAT = [
+	"mp3",  # OpenAI
+	"wav",  # Kokoro, Lemon, OpenAI
+]
+RETRIES = 3
+VOICES = [
+	"am_onyx",  # Kokoro
+	"ash",  # OpenAI
+	"onyx",  # Lemon, OpenAI
+	"sage",  # OpenAI
+]
 WORKERS = 6
 
 
-def create_silence(duration, filename, input_dir):
-	path = os.path.join(input_dir, filename)
-	cmd = [
-		"ffmpeg",
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-f",
-		"lavfi",
-		"-i",
-		"anullsrc=cl=mono",
-		"-t",
-		str(duration),
-		path,
-	]
-	subprocess.run(cmd)
-
-
-def extend_silence(duration, filename, input_dir):
-	path = os.path.join(input_dir, filename)
+def text_to_audio(
+	api_endpoint,
+	api_key,
+	attempt,
+	filename,
+	input_dir,
+	instructions,
+	max_tokens,
+	min_size,
+	model,
+	output_dir,
+	pause,
+	response_format,
+	retries,
+	voice,
+):
 	basename = os.path.splitext(filename)[0]
-	extended_filename = f"{basename}_extended.wav"
-	extended_path = os.path.join(input_dir, extended_filename)
-	cmd = [
-		"ffmpeg",
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-i",
-		path,
-		"-af",
-		f"apad=pad_dur={duration}",
-		extended_path,
-	]
-	subprocess.run(cmd)
-	os.remove(path)
-	os.rename(extended_path, path)
-
-
-def get_audio_duration(filename, input_dir):
 	path = os.path.join(input_dir, filename)
-	cmd = [
-		"ffprobe",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-i",
-		path,
-		"-show_entries",
-		"format=duration",
-		"-v",
-		"quiet",
-		"-of",
-		"csv=p=0",
-	]
-	return float(subprocess.check_output(cmd).decode().strip())
+	audio_filename = f"{basename}.wav"
+	audio_path = os.path.join(output_dir, audio_filename)
+	if is_valid_audio(min_size, audio_path):
+		return
+	text = parse_text_json(max_tokens, path)
+	if len(text) == 0:
+		return
+	headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+	payload = {
+		"model": model,
+		"input": text,
+		"voice": voice,
+		"response_format": response_format,
+	}
+	if instructions:
+		payload["instructions"] = instructions
+	for attempt in range(attempt, retries):
+		try:
+			response = requests.post(api_endpoint, headers=headers, json=payload)
+			if response.status_code == 200:
+				with open(audio_path, "wb") as f:
+					f.write(response.content)
+				if is_valid_audio(min_size, audio_path):
+					return
+		except:
+			pass
+		if attempt < retries - 1:
+			sleep_time = pause * (2**attempt)
+			time.sleep(sleep_time)
 
 
-def save_duration_json(basename, duration, output_dir):
-	path = os.path.join(output_dir, f"{basename}.json")
-	with open(path, "w") as f:
-		json.dump({basename: duration}, f, indent="\t", ensure_ascii=False)
-
-
-def set_audio_duration(filename, input_dir, output_dir, target_duration):
-	path = os.path.join(input_dir, filename)
-	basename = os.path.splitext(filename)[0]
-	if os.path.exists(path) and not os.stat(path).st_size == 0:
-		duration = get_audio_duration(filename, input_dir)
-		if duration < target_duration:
-			extend_silence(target_duration - duration, filename, input_dir)
-			duration = target_duration
-	else:
-		create_silence(target_duration, filename, input_dir)
-		duration = target_duration
-	save_duration_json(basename, duration, output_dir)
-
-
-def batch_set_audio_duration(batch, input_dir, output_dir, target_duration):
+def batch_text_to_audio(
+	api_endpoint,
+	api_key,
+	attempt,
+	batch,
+	input_dir,
+	instructions,
+	max_tokens,
+	min_size,
+	model,
+	output_dir,
+	pause,
+	retries,
+	response_format,
+	voice,
+):
 	for filename in batch:
-		set_audio_duration(filename, input_dir, output_dir, target_duration)
-
-
-def merge_duration_json(output_dir, input_dir):
-	durations = {}
-	total = 0
-	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
-	for filename in files:
-		path = os.path.join(input_dir, filename)
-		with open(path, "r") as f:
-			duration = json.load(f)
-		for key, value in duration.items():
-			durations[key] = value
-			total += value
-	path = os.path.join(output_dir, "durations.json")
-	with open(path, "w") as f:
-		json.dump(durations, f, indent="\t", ensure_ascii=False)
-	path = os.path.join(output_dir, "total_duration.txt")
-	with open(path, "w") as f:
-		f.write(str(total))
-
-
-def create_audio_list(audios, input_dir, output_dir, transition_duration):
-	path = os.path.join(output_dir, "audio_list.txt")
-	if transition_duration != 0:
-		create_silence(transition_duration, "0000000.wav", input_dir)
-	with open(path, "w") as f:
-		for i, filename in enumerate(audios):
-			abs_path = os.path.abspath(os.path.join(input_dir, filename))
-			f.write(f"file '{abs_path}'\n")
-			if transition_duration != 0 and i < len(audios) - 1:
-				abs_path = os.path.abspath(os.path.join(input_dir, "0000000.wav"))
-				f.write(f"file '{abs_path}'\n")
-
-
-def render_audio(input_dir, render_dir):
-	path_input = os.path.join(input_dir, "audio_list.txt")
-	path_render = os.path.join(render_dir, "audio.opus")
-	cmd = [
-		"ffmpeg",
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-f",
-		"concat",
-		"-safe",
-		"0",
-		"-i",
-		path_input,
-		"-c:a",
-		"libopus",
-		"-vbr",
-		"on",
-		"-compression_level",
-		"10",
-		"-frame_duration",
-		"60",
-		path_render,
-	]
-	subprocess.run(cmd)
+		text_to_audio(
+			api_endpoint,
+			api_key,
+			attempt,
+			filename,
+			input_dir,
+			instructions,
+			max_tokens,
+			min_size,
+			model,
+			output_dir,
+			pause,
+			retries,
+			response_format,
+			voice,
+		)
 
 
 if __name__ == "__main__":
-	audios = sorted(
-		[f for f in os.listdir(DIRS["image_audio"]) if f.lower().endswith(".wav")]
+	texts = sorted(
+		[f for f in os.listdir(DIRS["image_text"]) if f.lower().endswith(".json")]
 	)
 	workers = min(WORKERS, cpu_count())
-	batches = split_batches(workers, audios)
+	batches = split_batches(workers, texts)
 	with Pool(processes=workers) as pool:
 		args = [
 			(
+				API_ENDPOINTS[3],
+				API_KEYS[3],
+				0,
 				batch,
+				DIRS["image_text"],
+				INSTRUCTIONS[0],
+				MAX_TOKENS,
+				MIN_SIZE,
+				MODELS[1],
 				DIRS["image_audio"],
-				DIRS["image_durations"],
-				TARGET_DURATION,
+				PAUSE,
+				RESPONSE_FORMAT,
+				RETRIES,
+				VOICES[3],
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_set_audio_duration, args).get()
-	merge_duration_json(DIRS["merge"], DIRS["image_durations"])
-	create_audio_list(audios, DIRS["image_audio"], DIRS["merge"], TRANSITION)
-	render_audio(DIRS["merge"], DIRS["render"])
+		pool.starmap_async(batch_text_to_audio, args).get()

@@ -1,188 +1,292 @@
 from _0 import DIRS
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
-import base64
+from paddleocr import PaddleOCR, draw_ocr
+import cv2
 import json
+import math
 import os
-import regex
-import requests
-import time
 
-API_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
-API_KEY = os.environ.get("DEEPINFRA_API_KEY")
-LANGUAGE = "Russian"
-MAX_TOKENS = 2000
-MIN_SIZE = 13
-MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
-PAUSE = 10
-PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any introductory phrases or additional commentary. If no readable text is found, the text content is empty. Return JSON: [{{"text": "text content"}}, ...]'
-RETRIES = 3
-TEMPERATURE = 0.0
-TEMPERATURE_STEP = 0.2
-WORKERS = 60
+HEIGHT_RANGE = 96
+MARGIN = 16
+MAX_DISTANCE = 32
+WORKERS = 6
 
 
-def parse_json_text(string):
-	string = regex.sub(r"[\x00-\x1F\x7F]", "", string)
-	string = regex.sub(r"[^A-Za-z\p{Cyrillic}\p{N}\p{P}\p{Z}]", "", string)
-	try:
-		return json.loads(string)
-	except:
-		matches = regex.findall(r'"text"\s*:\s*"([^"]*)"', string)
-		if matches:
-			return [
-				{
-					"text": bytes(match, "utf-8").decode("unicode_escape")
-					if "\\u" in match
-					else match
-				}
-				for match in matches
-			]
-		return [{"text": ""}] if '"text"' in string else []
+def get_box_bounds(box):
+	min_x = min(p[0] for p in box)
+	min_y = min(p[1] for p in box)
+	max_x = max(p[0] for p in box)
+	max_y = max(p[1] for p in box)
+	return min_x, min_y, max_x, max_y
 
 
-def is_valid_json(min_size, path):
-	if not os.path.exists(path) or os.stat(path).st_size < min_size:
-		return False
-	try:
-		with open(path, encoding="utf-8") as f:
-			data = json.load(f)
-		return isinstance(data, list) and data
-	except:
-		return False
+def get_box_distance(box1, box2):
+	min_x1, min_y1, max_x1, max_y1 = get_box_bounds(box1)
+	min_x2, min_y2, max_x2, max_y2 = get_box_bounds(box2)
+	dx = max(min_x1 - max_x2, min_x2 - max_x1, 0)
+	dy = max(min_y1 - max_y2, min_y2 - max_y1, 0)
+	return math.sqrt(dx**2 + dy**2)
 
 
-def image_to_text(
-	api_endpoint,
-	api_key,
-	attempt,
-	filename,
-	input_dir,
-	max_tokens,
-	min_size,
-	model,
-	output_dir,
-	pause,
-	prompt,
-	retries,
-	temperature,
-	temperature_step,
-):
-	if attempt >= retries:
+def collect_connected_nodes(adj_list, current, node, visited):
+	visited[node] = True
+	current.append(node)
+	for neighbor in adj_list[node]:
+		if not visited[neighbor]:
+			collect_connected_nodes(adj_list, current, neighbor, visited)
+
+
+def group_boxes(boxes, max_distance):
+	count = len(boxes)
+	if count == 0:
 		return []
+	adj_list = [[] for _ in range(count)]
+	for i in range(count):
+		for j in range(i + 1, count):
+			if get_box_distance(boxes[i], boxes[j]) <= max_distance:
+				adj_list[i].append(j)
+				adj_list[j].append(i)
+	visited = [False] * count
+	groups = []
+	for i in range(count):
+		if not visited[i]:
+			current = []
+			collect_connected_nodes(adj_list, current, i, visited)
+			groups.append(current)
+	return groups
+
+
+def get_bounds_and_centers(boxes, groups, margin):
+	bounds = []
+	centers = []
+	for group in groups:
+		points = []
+		for i in group:
+			points.extend(boxes[i])
+		min_x = min(p[0] for p in points) - margin
+		min_y = min(p[1] for p in points) - margin
+		max_x = max(p[0] for p in points) + margin
+		max_y = max(p[1] for p in points) + margin
+		bounds.append((min_x, min_y, max_x, max_y))
+		center_x = (min_x + max_x) / 2
+		center_y = (min_y + max_y) / 2
+		centers.append((center_x, center_y))
+	return bounds, centers
+
+
+def get_priority(y_diff, corner_dist):
+	return (y_diff * 3) + corner_dist
+
+
+def order_boxes(bounds, centers, width):
+	if not centers:
+		return []
+	ranking = []
+	for i, center in enumerate(centers):
+		corner_dist = math.sqrt((width - center[0]) ** 2 + center[1] ** 2)
+		y_pos = bounds[i][1]
+		ranking.append((i, corner_dist, y_pos))
+	ranking.sort(key=lambda x: x[1])
+	order = [ranking[0][0]]
+	prev_y = bounds[ranking[0][0]][1]
+	unprocessed = ranking[1:]
+	while unprocessed:
+		scores = []
+		for i, corner_dist, y_pos in unprocessed:
+			y_diff = abs(y_pos - prev_y)
+			score = get_priority(y_diff, corner_dist)
+			scores.append((i, score))
+		scores.sort(key=lambda x: x[1])
+		next_index = scores[0][0]
+		order.append(next_index)
+		prev_y = bounds[next_index][1]
+		unprocessed = [(i, d, y) for i, d, y in unprocessed if i != next_index]
+	return order
+
+
+def draw_boxes(bounds, image, order):
+	image_copy = image.copy()
+	for i, box in enumerate(order):
+		x_min, y_min, x_max, y_max = bounds[box]
+		x_min, y_min, x_max, y_max = int(x_min), int(y_min), int(x_max), int(y_max)
+		red = (0, 0, 255)
+		cv2.rectangle(image_copy, (x_min, y_min), (x_max, y_max), red, 1)
+		cv2.putText(
+			image_copy,
+			str(i + 1),
+			(x_min + 4, y_min + 16),
+			cv2.FONT_HERSHEY_PLAIN,
+			1,
+			red,
+			1,
+		)
+	return image_copy
+
+
+def crop_images(basename, bounds, image, order, output_dir):
+	height, width = image.shape[:2]
+	for i, box in enumerate(order):
+		x_min, y_min, x_max, y_max = bounds[box]
+		x_min = max(0, int(x_min))
+		y_min = max(0, int(y_min))
+		x_max = min(width, int(x_max))
+		y_max = min(height, int(y_max))
+		crop = image[y_min:y_max, x_min:x_max]
+		filename = f"{basename}{i+1:03d}.jpg"
+		path = os.path.join(output_dir, filename)
+		cv2.imwrite(path, crop, [cv2.IMWRITE_JPEG_QUALITY, 100])
+
+
+def get_gaps(bounds, height, height_range, order):
+	if not order:
+		return [height]
+	positions = [bounds[i][1] for i in order]
+	gaps = [positions[0]]
+	for i in range(1, len(positions)):
+		gaps.append(positions[i] - positions[i - 1])
+	gaps.append(height - positions[-1])
+	remaining = 0
+	for i in range(len(gaps)):
+		gaps[i] += remaining
+		remaining = 0
+		if gaps[i] < height_range:
+			remaining = gaps[i]
+			gaps[i] = 0
+	if remaining > 0:
+		gaps[-1] += remaining
+	gaps = [max(0, gap) for gap in gaps]
+	total = sum(gaps)
+	if total != height:
+		gaps[-1] += height - total
+	return gaps
+
+
+def save_gaps_json(basename, gaps, output_dir):
+	path = os.path.join(output_dir, f"{basename}.json")
+	data = {}
+	for i, gap in enumerate(gaps):
+		key = f"{basename}{i+1:03d}"
+		data[key] = gap
+	with open(path, "w") as f:
+		json.dump(data, f, indent="\t", ensure_ascii=False)
+
+
+def init_ocr_engine():
+	return PaddleOCR(
+		gpu_id=0,
+		gpu_mem=1000,
+		lang="en",
+		layout=False,
+		ocr=False,
+		rec=False,
+		show_log=False,
+		table=False,
+		use_gpu=True,
+	)
+
+
+def detect_image(
+	filename,
+	height_range,
+	input_dir,
+	margin,
+	max_distance,
+	ocr_engine,
+	output_dir_box,
+	output_dir_crops,
+	output_dir_gaps,
+	output_dir_group,
+):
 	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
-	text_filename = f"{basename}.json"
-	text_path = os.path.join(output_dir, text_filename)
-	if is_valid_json(min_size, text_path):
+	ocrs = ocr_engine.ocr(path)
+	if not ocrs or len(ocrs) == 0 or not ocrs[0]:
 		return
-	with open(path, "rb") as f:
-		image = base64.b64encode(f.read()).decode()
-	headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-	payload = {
-		"max_tokens": max_tokens,
-		"model": model,
-		"messages": [
-			{
-				"role": "user",
-				"content": [
-					{"type": "text", "text": prompt},
-					{
-						"type": "image_url",
-						"image_url": {"url": f"data:image/jpeg;base64,{image}"},
-					},
-				],
-			}
-		],
-		"seed": 42,
-		"temperature": temperature,
-	}
-	for attempt in range(attempt, retries):
-		try:
-			payload["temperature"] = temperature
-			response = requests.post(api_endpoint, headers=headers, json=payload)
-			if response.status_code == 200:
-				content = response.json()["choices"][0]["message"]["content"]
-				start = content.find("[")
-				end = content.rfind("]") + 1
-				if start >= 0 and end > start:
-					parsed = parse_json_text(content[start:end])
-					if (
-						parsed
-						and len(str(parsed)) >= min_size
-						and isinstance(parsed, list)
-						and all(isinstance(item, dict) for item in parsed)
-					):
-						with open(text_path, "w", encoding="utf-8") as f:
-							json.dump(parsed, f, indent="\t", ensure_ascii=False)
-						return
-		except:
-			pass
-		if attempt < retries - 1:
-			sleep_time = pause * (2**attempt)
-			temperature += temperature_step
-			time.sleep(sleep_time)
+	boxes = [item[0] for item in ocrs[0]]
+	image = cv2.imread(path)
+	image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+	image_box = draw_ocr(image_rgb, boxes)
+	image_box = cv2.cvtColor(image_box, cv2.COLOR_RGB2BGR)
+	path_box = os.path.join(output_dir_box, os.path.splitext(path)[0])
+	cv2.imwrite(path_box, image_box, [cv2.IMWRITE_JPEG_QUALITY, 100])
+	groups = group_boxes(boxes, max_distance)
+	bounds, centers = get_bounds_and_centers(boxes, groups, margin)
+	order = order_boxes(bounds, centers, image.shape[1])
+	image_group = draw_boxes(bounds, image, order)
+	path_group = os.path.join(output_dir_group, os.path.splitext(path)[0])
+	cv2.imwrite(path_group, image_group, [cv2.IMWRITE_JPEG_QUALITY, 100])
+	crop_images(basename, bounds, image, order, output_dir_crops)
+	gaps = get_gaps(bounds, image.shape[0], height_range, order)
+	save_gaps_json(basename, gaps, output_dir_gaps)
 
 
-def batch_image_to_text(
-	api_endpoint,
-	api_key,
-	attempt,
+def batch_detect_images(
 	batch,
+	height_range,
 	input_dir,
-	max_tokens,
-	min_size,
-	model,
-	output_dir,
-	pause,
-	prompt,
-	retries,
-	temperature,
-	temperature_step,
+	margin,
+	max_distance,
+	output_dir_box,
+	output_dir_crops,
+	output_dir_gaps,
+	output_dir_group,
 ):
+	ocr_engine = init_ocr_engine()
 	for filename in batch:
-		image_to_text(
-			api_endpoint,
-			api_key,
-			attempt,
+		detect_image(
 			filename,
+			height_range,
 			input_dir,
-			max_tokens,
-			min_size,
-			model,
-			output_dir,
-			pause,
-			prompt,
-			retries,
-			temperature,
-			temperature_step,
+			margin,
+			max_distance,
+			ocr_engine,
+			output_dir_box,
+			output_dir_crops,
+			output_dir_gaps,
+			output_dir_group,
 		)
+
+
+def merge_gaps_json(output_dir, input_dir):
+	data = {}
+	total = 0
+	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
+	for filename in files:
+		path = os.path.join(input_dir, filename)
+		with open(path, "r") as f:
+			gap = json.load(f)
+		for key, value in gap.items():
+			data[key] = value
+			total += value
+	path = os.path.join(output_dir, "gaps.json")
+	with open(path, "w") as f:
+		json.dump(data, f, indent="\t", ensure_ascii=False)
+	path = os.path.join(output_dir, "total_gaps.txt")
+	with open(path, "w") as f:
+		f.write(str(total))
 
 
 if __name__ == "__main__":
 	images = sorted(
-		[f for f in os.listdir(DIRS["image_crops"]) if f.lower().endswith(".jpg")]
+		[f for f in os.listdir(DIRS["image_resized"]) if f.lower().endswith(".jpg")]
 	)
-	workers = min(WORKERS, 10 * cpu_count())
+	workers = min(WORKERS, cpu_count())
 	batches = split_batches(workers, images)
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINT,
-				API_KEY,
-				0,
 				batch,
+				HEIGHT_RANGE,
+				DIRS["image_resized"],
+				MARGIN,
+				MAX_DISTANCE,
+				DIRS["image_boxed"],
 				DIRS["image_crops"],
-				MAX_TOKENS,
-				MIN_SIZE,
-				MODEL,
-				DIRS["image_text"],
-				PAUSE,
-				PROMPT,
-				RETRIES,
-				TEMPERATURE,
-				TEMPERATURE_STEP,
+				DIRS["image_gaps"],
+				DIRS["image_grouped"],
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_image_to_text, args).get()
+		pool.starmap_async(batch_detect_images, args).get()
+	merge_gaps_json(DIRS["merge"], DIRS["image_gaps"])

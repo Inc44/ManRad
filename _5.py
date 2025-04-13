@@ -1,129 +1,188 @@
 from _0 import DIRS
-from _6 import parse_text_json
-import cv2
+from _2 import split_batches
+from multiprocessing import Pool, cpu_count
+import base64
 import json
 import os
-import tiktoken
+import regex
+import requests
+import time
 
-ENCODING_NAME = "cl100k_base"
+API_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
+API_KEY = os.environ.get("DEEPINFRA_API_KEY")
+LANGUAGE = "Russian"
 MAX_TOKENS = 2000
-COST_DEEPINFRA = (0.08, 0.30)
-COST_GEMINI = (0.10, 0.40)
-COST_GROQ = (0.90, 0.90)
-COST_OPENAI = (5.00, 15.00)
-COST_TTS = 15.0
+MIN_SIZE = 13
+MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
+PAUSE = 10
+PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any introductory phrases or additional commentary. If no readable text is found, the text content is empty. Return JSON: [{{"text": "text content"}}, ...]'
+RETRIES = 3
+TEMPERATURE = 0.0
+TEMPERATURE_STEP = 0.2
+WORKERS = 60
 
 
-def calculate_gemini_tokens(path):
-	image = cv2.imread(path)
-	width, height = image.shape[:2]
-	if width <= 384 and height <= 384:
-		return 258
-	tile_size = 768
-	tiles_x = -(-width // tile_size)
-	tiles_y = -(-height // tile_size)
-	return tiles_x * tiles_y * 258
+def parse_json_text(string):
+	string = regex.sub(r"[\x00-\x1F\x7F]", "", string)
+	string = regex.sub(r"[^A-Za-z\p{Cyrillic}\p{N}\p{P}\p{Z}]", "", string)
+	try:
+		return json.loads(string)
+	except:
+		matches = regex.findall(r'"text"\s*:\s*"([^"]*)"', string)
+		if matches:
+			return [
+				{
+					"text": bytes(match, "utf-8").decode("unicode_escape")
+					if "\\u" in match
+					else match
+				}
+				for match in matches
+			]
+		return [{"text": ""}] if '"text"' in string else []
 
 
-def calculate_openai_tokens(path, low_resolution=False):
-	if low_resolution:
-		return 85
-	image = cv2.imread(path)
-	width, height = image.shape[:2]
-	tile_size = 512
-	tiles_x = -(-width // tile_size)
-	tiles_y = -(-height // tile_size)
-	return tiles_x * tiles_y * 170 + 85
+def is_valid_json(min_size, path):
+	if not os.path.exists(path) or os.stat(path).st_size < min_size:
+		return False
+	try:
+		with open(path, encoding="utf-8") as f:
+			data = json.load(f)
+		return isinstance(data, list) and data
+	except:
+		return False
+
+
+def image_to_text(
+	api_endpoint,
+	api_key,
+	attempt,
+	filename,
+	input_dir,
+	max_tokens,
+	min_size,
+	model,
+	output_dir,
+	pause,
+	prompt,
+	retries,
+	temperature,
+	temperature_step,
+):
+	if attempt >= retries:
+		return []
+	basename = os.path.splitext(filename)[0]
+	path = os.path.join(input_dir, filename)
+	text_filename = f"{basename}.json"
+	text_path = os.path.join(output_dir, text_filename)
+	if is_valid_json(min_size, text_path):
+		return
+	with open(path, "rb") as f:
+		image = base64.b64encode(f.read()).decode()
+	headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+	payload = {
+		"max_tokens": max_tokens,
+		"model": model,
+		"messages": [
+			{
+				"role": "user",
+				"content": [
+					{"type": "text", "text": prompt},
+					{
+						"type": "image_url",
+						"image_url": {"url": f"data:image/jpeg;base64,{image}"},
+					},
+				],
+			}
+		],
+		"seed": 42,
+		"temperature": temperature,
+	}
+	for attempt in range(attempt, retries):
+		try:
+			payload["temperature"] = temperature
+			response = requests.post(api_endpoint, headers=headers, json=payload)
+			if response.status_code == 200:
+				content = response.json()["choices"][0]["message"]["content"]
+				start = content.find("[")
+				end = content.rfind("]") + 1
+				if start >= 0 and end > start:
+					parsed = parse_json_text(content[start:end])
+					if (
+						parsed
+						and len(str(parsed)) >= min_size
+						and isinstance(parsed, list)
+						and all(isinstance(item, dict) for item in parsed)
+					):
+						with open(text_path, "w", encoding="utf-8") as f:
+							json.dump(parsed, f, indent="\t", ensure_ascii=False)
+						return
+		except:
+			pass
+		if attempt < retries - 1:
+			sleep_time = pause * (2**attempt)
+			temperature += temperature_step
+			time.sleep(sleep_time)
+
+
+def batch_image_to_text(
+	api_endpoint,
+	api_key,
+	attempt,
+	batch,
+	input_dir,
+	max_tokens,
+	min_size,
+	model,
+	output_dir,
+	pause,
+	prompt,
+	retries,
+	temperature,
+	temperature_step,
+):
+	for filename in batch:
+		image_to_text(
+			api_endpoint,
+			api_key,
+			attempt,
+			filename,
+			input_dir,
+			max_tokens,
+			min_size,
+			model,
+			output_dir,
+			pause,
+			prompt,
+			retries,
+			temperature,
+			temperature_step,
+		)
 
 
 if __name__ == "__main__":
 	images = sorted(
 		[f for f in os.listdir(DIRS["image_crops"]) if f.lower().endswith(".jpg")]
 	)
-	texts = sorted(
-		[f for f in os.listdir(DIRS["image_text"]) if f.lower().endswith(".json")]
-	)
-	count = len(images)
-	token_count_deepinfra = 48 * count
-	token_count_gemini = 48 * count
-	token_count_groq = 48 * count
-	token_count_openai = 48 * count
-	for image in images:
-		image_path = os.path.join(DIRS["image_crops"], image)
-		token_count_deepinfra += 160
-		token_count_gemini += calculate_gemini_tokens(image_path)
-		token_count_groq += 6400
-		token_count_openai += calculate_openai_tokens(image_path)
-	extracted_text = ""
-	for text_file in texts:
-		text_path = os.path.join(DIRS["image_text"], text_file)
-		extracted_text += parse_text_json(MAX_TOKENS, text_path)
-	character_count = len(extracted_text)
-	encoding = tiktoken.get_encoding(ENCODING_NAME)
-	output_token_count = int(len(encoding.encode(extracted_text)) * 1.5)
-	cost_data = {
-		"count": count,
-		"deepinfra": {
-			"input_tokens": token_count_deepinfra,
-			"output_tokens": output_token_count,
-			"input_cost": round(
-				(COST_DEEPINFRA[0] * token_count_deepinfra) / 1000000, 4
-			),
-			"output_cost": round((COST_DEEPINFRA[1] * output_token_count) / 1000000, 4),
-			"total_cost": round(
-				(
-					COST_DEEPINFRA[0] * token_count_deepinfra
-					+ COST_DEEPINFRA[1] * output_token_count
-				)
-				/ 1000000,
-				4,
-			),
-		},
-		"gemini": {
-			"input_tokens": token_count_gemini,
-			"output_tokens": output_token_count,
-			"input_cost": round((COST_GEMINI[0] * token_count_gemini) / 1000000, 4),
-			"output_cost": round((COST_GEMINI[1] * output_token_count) / 1000000, 4),
-			"total_cost": round(
-				(
-					COST_GEMINI[0] * token_count_gemini
-					+ COST_GEMINI[1] * output_token_count
-				)
-				/ 1000000,
-				4,
-			),
-		},
-		"groq": {
-			"input_tokens": token_count_groq,
-			"output_tokens": output_token_count,
-			"input_cost": round((COST_GROQ[0] * token_count_groq) / 1000000, 4),
-			"output_cost": round((COST_GROQ[1] * output_token_count) / 1000000, 4),
-			"total_cost": round(
-				(COST_GROQ[0] * token_count_groq + COST_GROQ[1] * output_token_count)
-				/ 1000000,
-				4,
-			),
-		},
-		"openai": {
-			"input_tokens": token_count_openai,
-			"output_tokens": output_token_count,
-			"input_cost": round((COST_OPENAI[0] * token_count_openai) / 1000000, 4),
-			"output_cost": round((COST_OPENAI[1] * output_token_count) / 1000000, 4),
-			"total_cost": round(
-				(
-					COST_OPENAI[0] * token_count_openai
-					+ COST_OPENAI[1] * output_token_count
-				)
-				/ 1000000,
-				4,
-			),
-		},
-		"tts": {
-			"input_chars": character_count,
-			"input_cost": round(COST_TTS * character_count / 1000000, 4),
-		},
-	}
-	print(json.dumps(cost_data, indent="\t", ensure_ascii=False))
-	output_path = os.path.join(DIRS["merge"], "cost.json")
-	with open(output_path, "w", encoding="utf-8") as f:
-		json.dump(cost_data, f, indent="\t", ensure_ascii=False)
+	workers = min(WORKERS, 10 * cpu_count())
+	batches = split_batches(workers, images)
+	with Pool(processes=workers) as pool:
+		args = [
+			(
+				API_ENDPOINT,
+				API_KEY,
+				0,
+				batch,
+				DIRS["image_crops"],
+				MAX_TOKENS,
+				MIN_SIZE,
+				MODEL,
+				DIRS["image_text"],
+				PAUSE,
+				PROMPT,
+				RETRIES,
+				TEMPERATURE,
+				TEMPERATURE_STEP,
+			)
+			for batch in batches
+		]
+		pool.starmap_async(batch_image_to_text, args).get()

@@ -1,63 +1,57 @@
 from _0 import DIRS
 from _2 import split_batches
-from _6 import is_valid_audio, parse_text_json
 from multiprocessing import Pool, cpu_count
+import base64
+import json
 import os
+import regex
 import requests
 import time
 
-API_ENDPOINTS = [
-	"http://localhost:8880/v1/audio/speech",  # Kokoro
-	"https://api.lemonfox.ai/v1/audio/speech",  # Lemon
-	"https://api.openai.com/v1/audio/speech",  # OpenAI
-]
-API_KEYS = [
-	"not-needed",  # Kokoro
-	os.environ.get("LEMON_API_KEY"),  # Lemon
-	os.environ.get("OPENAI_API_KEY"),  # OpenAI
-]
-INSTRUCTIONS = [
-	"",
-	"Speak in an emotive and friendly tone... Read only if the text is in Russian",
-	"Speak with intonation and emotions in the given sentences from the intense manga.",
-]
+API_ENDPOINT = "http://127.0.0.1:8080/v1/tts"
 MAX_TOKENS = 2000
 MIN_SIZE = 78
-MODELS = [
-	"gpt-4o-mini-tts",  # OpenAI
-	"tts-1",  # Kokoro, Lemon, OpenAI
-	"tts-1-hd",  # OpenAI
-]
 PAUSE = 10
-RESPONSE_FORMAT = [
-	"mp3",  # OpenAI
-	"wav",  # Kokoro, Lemon, OpenAI
-]
+REFERENCE_AUDIO = "reference/reference_audio.flac"
+REFERENCE_TEXT = "reference/reference_text.txt"
 RETRIES = 3
-VOICES = [
-	"am_onyx",  # Kokoro
-	"ash",  # OpenAI
-	"onyx",  # Lemon, OpenAI
-	"sage",  # OpenAI
-]
+TEMPERATURE = 0.1
 WORKERS = 6
+
+
+def parse_text_json(max_tokens, path):
+	with open(path, "r", encoding="utf-8") as f:
+		data = json.load(f)
+	if isinstance(data, list):
+		text = " ".join(item.get("text", "") for item in data if isinstance(item, dict))
+	elif isinstance(data, dict):
+		text = data.get("text", "")
+	else:
+		return ""
+	text = text.replace("- ", "")
+	text = regex.sub(r"\s+", " ", text).strip()
+	if text:
+		text = text[0].upper() + text[1:]
+	return text[: max_tokens * 2]
+
+
+def is_valid_audio(min_size, path):
+	return os.path.exists(path) and os.stat(path).st_size >= min_size
 
 
 def text_to_audio(
 	api_endpoint,
-	api_key,
 	attempt,
 	filename,
 	input_dir,
-	instructions,
 	max_tokens,
 	min_size,
-	model,
 	output_dir,
 	pause,
-	response_format,
+	reference_audio_path,
+	reference_text_path,
 	retries,
-	voice,
+	temperature,
 ):
 	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
@@ -68,15 +62,27 @@ def text_to_audio(
 	text = parse_text_json(max_tokens, path)
 	if len(text) == 0:
 		return
-	headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+	with open(reference_text_path, "r", encoding="utf-8") as f:
+		reference_text = f.read().strip()
+	with open(reference_audio_path, "rb") as f:
+		reference_audio = base64.b64encode(f.read()).decode()
+	references = []
+	if reference_text and reference_audio:
+		references.append({"audio": reference_audio, "text": reference_text})
+	headers = {"Content-Type": "application/json"}
 	payload = {
-		"model": model,
-		"input": text,
-		"voice": voice,
-		"response_format": response_format,
+		"chunk_length": max_tokens * 2,
+		"format": "wav",
+		"max_new_tokens": max_tokens,
+		"normalize": True,
+		"reference_id": None,
+		"references": references,
+		"seed": 42,
+		"streaming": False,
+		"temperature": temperature,
+		"text": text,
+		"use_memory_cache": "on",
 	}
-	if instructions:
-		payload["instructions"] = instructions
 	for attempt in range(attempt, retries):
 		try:
 			response = requests.post(api_endpoint, headers=headers, json=payload)
@@ -94,36 +100,32 @@ def text_to_audio(
 
 def batch_text_to_audio(
 	api_endpoint,
-	api_key,
 	attempt,
 	batch,
 	input_dir,
-	instructions,
 	max_tokens,
 	min_size,
-	model,
 	output_dir,
 	pause,
+	reference_audio_path,
+	reference_text_path,
 	retries,
-	response_format,
-	voice,
+	temperature,
 ):
 	for filename in batch:
 		text_to_audio(
 			api_endpoint,
-			api_key,
 			attempt,
 			filename,
 			input_dir,
-			instructions,
 			max_tokens,
 			min_size,
-			model,
 			output_dir,
 			pause,
+			reference_audio_path,
+			reference_text_path,
 			retries,
-			response_format,
-			voice,
+			temperature,
 		)
 
 
@@ -136,20 +138,18 @@ if __name__ == "__main__":
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINTS[3],
-				API_KEYS[3],
+				API_ENDPOINT,
 				0,
 				batch,
 				DIRS["image_text"],
-				INSTRUCTIONS[0],
 				MAX_TOKENS,
 				MIN_SIZE,
-				MODELS[1],
 				DIRS["image_audio"],
 				PAUSE,
-				RESPONSE_FORMAT,
+				REFERENCE_AUDIO,
+				REFERENCE_TEXT,
 				RETRIES,
-				VOICES[3],
+				TEMPERATURE,
 			)
 			for batch in batches
 		]
