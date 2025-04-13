@@ -1,40 +1,16 @@
-import os
-import subprocess
+# Autodetect target height and width using most common dimensions
+from _0 import DIRS
+from _2 import split_batches
+from multiprocessing import Pool, cpu_count
 import cv2
+import os
 import shutil
 
-TARGET_FPS = 60
-TARGET_HEIGHT = 1350
-TARGET_WIDTH = 900
+TARGET_HEIGHT = 1292
+WORKERS = 6
 
 
-def render_fade_video(input_dir, render_dir):
-	path_input = os.path.join(input_dir, "fade_video_list.txt")
-	path_render = os.path.join(render_dir, "fade_video.mkv")
-	cmd = [
-		"ffmpeg",
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-f",
-		"concat",
-		"-safe",
-		"0",
-		"-i",
-		path_input,
-		"-fps_mode",
-		"vfr",
-		"-c:v",
-		"libx264",
-		"-preset",
-		"medium",
-		path_render,
-	]
-	subprocess.run(cmd)
-
-
-def resize_image_to_fit(filename, input_dir, output_dir, target_height):
+def resize_fit_image(filename, input_dir, output_dir, target_height):
 	path = os.path.join(input_dir, filename)
 	image = cv2.imread(path)
 	if image is None:
@@ -56,3 +32,22 @@ def resize_image_to_fit(filename, input_dir, output_dir, target_height):
 			image, top_pad, bottom_pad, 0, 0, cv2.BORDER_CONSTANT, value=[0, 0, 0]
 		)
 	cv2.imwrite(output_path, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
+
+
+def batch_resize_images(batch, input_dir, output_dir, target_width):
+	for filename in batch:
+		resize_fit_image(filename, input_dir, output_dir, target_width)
+
+
+if __name__ == "__main__":
+	images = sorted(
+		[f for f in os.listdir(DIRS["image_resized"]) if f.lower().endswith(".jpg")]
+	)
+	workers = min(WORKERS, cpu_count())
+	batches = split_batches(workers, images)
+	with Pool(processes=workers) as pool:
+		args = [
+			(batch, DIRS["image_resized"], DIRS["image_resized_fit"], TARGET_HEIGHT)
+			for batch in batches
+		]
+		pool.starmap_async(batch_resize_images, args).get()

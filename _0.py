@@ -10,6 +10,7 @@ DIRS = {
 	"image_gaps": "image_gaps",
 	"image_grouped": "image_grouped",
 	"image_resized": "image_resized",
+	"image_resized_fit": "image_resized_fit",
 	"image_text": "image_text",
 	"merge": "merge",
 	"render": "render",
