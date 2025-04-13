@@ -147,7 +147,7 @@ if __name__ == "__main__":
 				MODELS[1],
 				DIRS["image_audio"],
 				PAUSE,
-				RESPONSE_FORMAT[0],
+				RESPONSE_FORMAT[1],
 				RETRIES,
 				VOICES[3],
 			)

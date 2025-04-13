@@ -163,7 +163,11 @@ def render_audio(input_dir, render_dir):
 
 if __name__ == "__main__":
 	audios = sorted(
-		[f for f in os.listdir(DIRS["image_audio"]) if f.lower().endswith(".wav")]
+		[
+			f.replace(".jpg", ".wav")
+			for f in os.listdir(DIRS["image_crops"])
+			if f.lower().endswith(".jpg")
+		]
 	)
 	workers = min(WORKERS, cpu_count())
 	batches = split_batches(workers, audios)
