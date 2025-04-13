@@ -11,6 +11,5 @@
 **/*.wav
 **/*.webp
 **/*.zip
-output/**
-test/tts/checkpoints*/**
-test/tts/openvoice/**
+_test/tts/checkpoints*/**
+_test/tts/openvoice/**
