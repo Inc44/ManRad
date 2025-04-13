@@ -3,6 +3,7 @@ from multiprocessing import Pool, cpu_count
 import cv2
 import os
 
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 TARGET_WIDTH = 750
 WORKERS = 6
 
@@ -17,6 +18,8 @@ def resize_image(filename, input_dir, output_dir, target_width):
 	resized = cv2.resize(
 		image, (target_width, new_height), interpolation=cv2.INTER_AREA
 	)
+	basename = os.path.splitext(filename)[0]
+	filename = f"{basename}.jpg"
 	output_path = os.path.join(output_dir, filename)
 	cv2.imwrite(output_path, resized, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
@@ -35,7 +38,11 @@ def batch_resize_images(batch, input_dir, output_dir, target_width):
 
 if __name__ == "__main__":
 	images = sorted(
-		[f for f in os.listdir(DIRS["image"]) if f.lower().endswith(".jpg")]
+		[
+			f
+			for f in os.listdir(DIRS["image"])
+			if any(f.lower().endswith(ext) for ext in IMAGE_EXTENSIONS)
+		]
 	)
 	workers = min(WORKERS, cpu_count())
 	batches = split_batches(workers, images)

@@ -198,7 +198,7 @@ def detect_image(
 	output_dir_gaps,
 	output_dir_group,
 ):
-	basename = os.path.basename(filename)
+	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
 	ocrs = ocr_engine.ocr(path)
 	if not ocrs or len(ocrs) == 0 or not ocrs[0]:
@@ -208,13 +208,13 @@ def detect_image(
 	image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 	image_box = draw_ocr(image_rgb, boxes)
 	image_box = cv2.cvtColor(image_box, cv2.COLOR_RGB2BGR)
-	path_box = os.path.join(output_dir_box, os.path.basename(path))
+	path_box = os.path.join(output_dir_box, os.path.splitext(path)[0])
 	cv2.imwrite(path_box, image_box, [cv2.IMWRITE_JPEG_QUALITY, 100])
 	groups = group_boxes(boxes, max_distance)
 	bounds, centers = get_bounds_and_centers(boxes, groups, margin)
 	order = order_boxes(bounds, centers, image.shape[1])
 	image_group = draw_boxes(bounds, image, order)
-	path_group = os.path.join(output_dir_group, os.path.basename(path))
+	path_group = os.path.join(output_dir_group, os.path.splitext(path)[0])
 	cv2.imwrite(path_group, image_group, [cv2.IMWRITE_JPEG_QUALITY, 100])
 	crop_images(basename, bounds, image, order, output_dir_crops)
 	gaps = get_gaps(bounds, image.shape[0], height_range, order)

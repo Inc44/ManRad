@@ -1,6 +1,7 @@
 from _0 import DIRS
 import os
 import regex
+import sys
 import zipfile
 
 SOURCE_PATHS = [
@@ -25,7 +26,7 @@ def extract_archive(output_dir, prefix, zip_path):
 		return
 	with zipfile.ZipFile(zip_path, "r") as z:
 		for info in z.infolist():
-			basename = os.path.basename(info.filename)
+			basename = os.path.splitext(info.filename)[0]
 			filename = f"{prefix:04d}_{basename}"
 			output_path = os.path.join(output_dir, filename)
 			data = z.read(info.filename)
@@ -49,6 +50,8 @@ def move_images(input_dir, output_dir, prefix):
 
 if __name__ == "__main__":
 	source_path = SOURCE_PATHS[1]
+	if len(sys.argv) > 1:
+		source_path = sys.argv[1]
 	output_dir = DIRS["image"]
 	temp_dir = DIRS["temp"]
 	if (

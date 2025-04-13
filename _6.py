@@ -53,7 +53,7 @@ def text_to_audio(
 	retries,
 	temperature,
 ):
-	basename = os.path.basename(filename)
+	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
 	audio_filename = f"{basename}.wav"
 	audio_path = os.path.join(output_dir, audio_filename)

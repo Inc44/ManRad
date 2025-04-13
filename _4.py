@@ -70,7 +70,7 @@ def image_to_text(
 ):
 	if attempt >= retries:
 		return []
-	basename = os.path.basename(filename)
+	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
 	text_filename = f"{basename}.json"
 	text_path = os.path.join(output_dir, text_filename)
