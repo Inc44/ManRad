@@ -33,7 +33,7 @@ def create_silence(duration, filename, input_dir):
 
 def extend_silence(duration, filename, input_dir):
 	path = os.path.join(input_dir, filename)
-	basename, _ = os.path.splitext(filename)
+	basename = os.path.basename(filename)
 	extended_filename = f"{basename}_extended.wav"
 	extended_path = os.path.join(input_dir, extended_filename)
 	cmd = [
@@ -80,7 +80,7 @@ def save_duration_json(basename, duration, output_dir):
 
 def set_audio_duration(filename, input_dir, output_dir, target_duration):
 	path = os.path.join(input_dir, filename)
-	basename, _ = os.path.splitext(filename)
+	basename = os.path.basename(filename)
 	if os.path.exists(path) and not os.stat(path).st_size == 0:
 		duration = get_audio_duration(filename, input_dir)
 		if duration < target_duration:

@@ -21,42 +21,42 @@ def natural_sort(text):
 	]
 
 
-def extract_zip(zip_path, output_dir, prefix_index):
+def extract(output_dir, prefix, zip_path):
 	if not zipfile.is_zipfile(zip_path):
 		return
 	with zipfile.ZipFile(zip_path, "r") as f:
-		for file_info in f.infolist():
-			original_name = os.path.basename(file_info.filename)
-			new_name = f"{prefix_index:04d}_{original_name}"
-			output_path = os.path.join(output_dir, new_name)
-			file_data = f.read(file_info.filename)
-			with open(output_path, "wb") as f:
-				f.write(file_data)
+		for info in f.infolist():
+			basename = os.path.basename(info.filename)
+			filename = f"{prefix:04d}_{basename}"
+			path = os.path.join(output_dir, filename)
+			data = f.read(info.filename)
+			with open(path, "wb") as f:
+				f.write(data)
 
 
-def copy_images_from_folder(source_folder, dest_folder, prefix_index):
+def move(input_dir, output_dir, prefix):
 	images = [
-		file
-		for file in os.listdir(source_folder)
-		if os.path.isfile(os.path.join(source_folder, file))
-		and os.path.splitext(file)[1].lower() in IMAGE_EXTS
-		and not file.startswith(".")
+		f
+		for f in os.listdir(input_dir)
+		if os.path.isfile(os.path.join(input_dir, f))
+		and os.path.splitext(f)[1].lower() in IMAGE_EXTS
+		and not f.startswith(".")
 	]
 	for image in sorted(images, key=natural_sort):
-		new_name = f"{prefix_index:04d}_{image}"
-		new_path = os.path.join(dest_folder, new_name)
-		shutil.copy2(os.path.join(source_folder, image), new_path)
+		filename = f"{prefix:04d}_{image}"
+		path = os.path.join(output_dir, filename)
+		os.rename(os.path.join(input_dir, image), path)
 
 
 if __name__ == "__main__":
 	source = SOURCES[0]
-	output_folder = DIRS["image"]
-	temp_folder = DIRS["temp"]
+	output_dir = DIRS["image"]
+	temp_dir = DIRS["temp"]
 	if os.path.isfile(source) and os.path.splitext(source)[1].lower() in ARCHIVE_EXTS:
-		extract_zip(source, temp_folder, 0)
+		extract(source, temp_dir, 0)
 	elif os.path.isdir(source):
 		items = os.listdir(source)
-		archive_files = sorted(
+		archives = sorted(
 			[
 				f
 				for f in items
@@ -65,11 +65,11 @@ if __name__ == "__main__":
 			],
 			key=natural_sort,
 		)
-		subfolders = sorted(
+		sub_dirs = sorted(
 			[f for f in items if os.path.isdir(os.path.join(source, f))],
 			key=natural_sort,
 		)
-		image_files = sorted(
+		images = sorted(
 			[
 				f
 				for f in items
@@ -79,34 +79,31 @@ if __name__ == "__main__":
 			],
 			key=natural_sort,
 		)
-		if archive_files:
-			for idx, archive in enumerate(archive_files):
-				extract_zip(os.path.join(source, archive), temp_folder, idx)
-		elif subfolders:
-			for idx, folder in enumerate(subfolders):
-				folder_path = os.path.join(source, folder)
-				if not os.access(folder_path, os.R_OK):
+		if archives:
+			for i, archive in enumerate(archives):
+				extract(os.path.join(source, archive), temp_dir, i)
+		elif sub_dirs:
+			for i, sub_dir in enumerate(sub_dirs):
+				path = os.path.join(source, sub_dir)
+				if not os.access(path, os.R_OK):
 					continue
-				copy_images_from_folder(folder_path, temp_folder, idx)
-		elif image_files:
-			copy_images_from_folder(source, temp_folder, 0)
+				move(path, temp_dir, i)
+		elif images:
+			move(source, temp_dir, 0)
 	temp_images = []
-	for file in os.listdir(temp_folder):
-		file_path = os.path.join(temp_folder, file)
-		if (
-			os.path.isfile(file_path)
-			and os.path.splitext(file)[1].lower() in IMAGE_EXTS
-		):
-			temp_images.append(file)
+	for f in os.listdir(temp_dir):
+		path = os.path.join(temp_dir, f)
+		if os.path.isfile(path) and os.path.splitext(f)[1].lower() in IMAGE_EXTS:
+			temp_images.append(f)
 	temp_images = sorted(temp_images, key=natural_sort)
-	image_number = 1
+	counter = 1
 	for temp_image in temp_images:
-		image_path = os.path.join(temp_folder, temp_image)
+		temp_path = os.path.join(temp_dir, temp_image)
 		ext = os.path.splitext(temp_image)[1].lower()
-		new_filename = f"{image_number:04d}{ext}"
-		dest_path = os.path.join(output_folder, new_filename)
-		if os.path.exists(dest_path):
+		filename = f"{counter:04d}{ext}"
+		path = os.path.join(output_dir, filename)
+		if os.path.exists(path):
 			continue
-		shutil.move(image_path, dest_path)
-		if os.path.exists(dest_path):
-			image_number += 1
+		shutil.move(temp_path, path)
+		if os.path.exists(path):
+			counter += 1

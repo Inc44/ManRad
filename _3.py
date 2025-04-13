@@ -198,7 +198,7 @@ def detect_image(
 	output_dir_gaps,
 	output_dir_group,
 ):
-	basename, _ = os.path.splitext(filename)
+	basename = os.path.basename(filename)
 	path = os.path.join(input_dir, filename)
 	ocrs = ocr_engine.ocr(path)
 	if not ocrs or len(ocrs) == 0 or not ocrs[0]:

@@ -59,7 +59,7 @@ def text_to_audio(
 	retries,
 	voice,
 ):
-	basename, _ = os.path.splitext(filename)
+	basename = os.path.basename(filename)
 	path = os.path.join(input_dir, filename)
 	audio_filename = f"{basename}.wav"
 	audio_path = os.path.join(output_dir, audio_filename)
