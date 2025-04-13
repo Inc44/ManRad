@@ -23,12 +23,12 @@ def natural_sort(text):
 def extract_archive(output_dir, prefix, zip_path):
 	if not zipfile.is_zipfile(zip_path):
 		return
-	with zipfile.ZipFile(zip_path, "r") as f:
-		for info in f.infolist():
+	with zipfile.ZipFile(zip_path, "r") as z:
+		for info in z.infolist():
 			basename = os.path.basename(info.filename)
 			filename = f"{prefix:04d}_{basename}"
 			output_path = os.path.join(output_dir, filename)
-			data = f.read(info.filename)
+			data = z.read(info.filename)
 			with open(output_path, "wb") as f:
 				f.write(data)
 
@@ -48,14 +48,14 @@ def move_images(input_dir, output_dir, prefix):
 
 
 if __name__ == "__main__":
-	source_path = SOURCE_PATHS[0]
+	source_path = SOURCE_PATHS[1]
 	output_dir = DIRS["image"]
 	temp_dir = DIRS["temp"]
 	if (
 		os.path.isfile(source_path)
 		and os.path.splitext(source_path)[1].lower() in ARCHIVE_EXTENSIONS
 	):
-		extract_archive(output_dir, 0, source_path)
+		extract_archive(temp_dir, 0, source_path)
 	elif os.path.isdir(source_path):
 		paths = os.listdir(source_path)
 		archives = sorted(
