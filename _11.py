@@ -1,3 +1,4 @@
+from _0 import DIRS
 import cv2
 import os
 import subprocess
@@ -74,3 +75,13 @@ def render_media(audio_dir, video_dir, render_dir):
 		render_path,
 	]
 	subprocess.run(cmd)
+
+
+if __name__ == "__main__":
+	audios = sorted(
+		[
+			f
+			for f in os.listdir(DIRS["image_audio_resized"])
+			if f.lower().endswith(".wav")
+		]
+	)

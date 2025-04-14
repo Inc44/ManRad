@@ -10,7 +10,7 @@ import shutil
 import subprocess
 
 TARGET_DURATION = 1
-TRANSITION = 0
+TRANSITION = 0.5
 WORKERS = 6
 
 
@@ -122,15 +122,15 @@ def merge_duration_json(output_dir, input_dir):
 
 def create_audio_list(audios, input_dir, output_dir, transition_duration):
 	output_path = os.path.join(output_dir, "audio_list.txt")
+	transition_path = os.path.abspath(os.path.join(input_dir, "0000000.wav"))
 	if transition_duration != 0:
-		create_silence(transition_duration, "0000000.wav", input_dir)
+		create_silence(transition_duration, transition_path)
 	with open(output_path, "w") as f:
 		for i, filename in enumerate(audios):
 			abs_path = os.path.abspath(os.path.join(input_dir, filename))
 			f.write(f"file '{abs_path}'\n")
 			if transition_duration != 0 and i < len(audios) - 1:
-				abs_path = os.path.abspath(os.path.join(input_dir, "0000000.wav"))
-				f.write(f"file '{abs_path}'\n")
+				f.write(f"file '{transition_path}'\n")
 
 
 def render_audio(input_dir, render_dir):
