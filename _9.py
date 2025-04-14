@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 
+DELAY_DURATION = 1
 SAMPLE_RATE = 48000
 TARGET_DURATION = 1
 TRANSITION_DURATION = 0.5
@@ -144,6 +145,17 @@ def create_transition_files(
 		previous_prefix = current_prefix
 
 
+def create_delay(audios, resized_dir, duration_dir, delay_duration, sample_rate):
+	if delay_duration == 0:
+		return
+	filename = audios[0]
+	basename = f"{filename[:4]}000"
+	filename = f"{basename}.wav"
+	transition_path = os.path.join(resized_dir, filename)
+	create_silence(delay_duration, transition_path, sample_rate)
+	save_duration_json(basename, delay_duration, duration_dir)
+
+
 def merge_duration_json(output_dir, input_dir):
 	durations = {}
 	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
@@ -173,9 +185,9 @@ def calculate_total_duration(input_dir):
 def create_audio_list(audios, input_dir, output_dir):
 	output_path = os.path.join(output_dir, "audio_list.txt")
 	with open(output_path, "w") as f:
-		for i, filename in enumerate(audios):
-			abs_path = os.path.abspath(os.path.join(input_dir, filename))
-			f.write(f"file '{abs_path}'\n")
+		for filename in audios:
+			path = os.path.join(input_dir, filename)
+			f.write(f"file '{os.path.abspath(path)}'\n")
 
 
 def render_audio(input_dir, render_dir, sample_rate):
@@ -243,6 +255,20 @@ if __name__ == "__main__":
 		DIRS["image_audio_resized"],
 		DIRS["image_durations"],
 		TRANSITION_DURATION,
+		SAMPLE_RATE,
+	)
+	audios = sorted(
+		[
+			f
+			for f in os.listdir(DIRS["image_audio_resized"])
+			if f.lower().endswith(".wav")
+		]
+	)
+	create_delay(
+		audios,
+		DIRS["image_audio_resized"],
+		DIRS["image_durations"],
+		DELAY_DURATION,
 		SAMPLE_RATE,
 	)
 	merge_duration_json(DIRS["merge"], DIRS["image_durations"])

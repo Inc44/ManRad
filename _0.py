@@ -11,6 +11,7 @@ DIRS = {
 	"image_grouped": "image_grouped",
 	"image_resized": "image_resized",
 	"image_resized_fit": "image_resized_fit",
+	"image_resized_fit_fade": "image_resized_fit_fade",
 	"image_text": "image_text",
 	"merge": "merge",
 	"render": "render",
