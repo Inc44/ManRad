@@ -3,7 +3,6 @@
 # Fix missing audio
 from _0 import DIRS
 from _2 import split_batches
-from collections import OrderedDict
 from multiprocessing import Pool, cpu_count
 import json
 import os
@@ -28,6 +27,8 @@ def create_silence(duration, output_path, sample_rate):
 		f"anullsrc=r={sample_rate}:cl=mono",
 		"-t",
 		str(duration),
+		"-c:a",
+		"pcm_s16le",
 		output_path,
 	]
 	subprocess.run(cmd)
@@ -46,6 +47,8 @@ def extend_silence(duration, input_path, output_path, sample_rate):
 		str(sample_rate),
 		"-af",
 		f"apad=pad_dur={duration}",
+		"-c:a",
+		"pcm_s16le",
 		output_path,
 	]
 	subprocess.run(cmd)
@@ -69,7 +72,7 @@ def get_audio_duration(input_path):
 	try:
 		return float(subprocess.check_output(cmd).decode().strip())
 	except:
-		return 0
+		return 0.0
 
 
 def save_duration_json(basename, duration, output_dir):
@@ -104,15 +107,14 @@ def set_audio_duration(
 	input_path = os.path.join(input_dir, filename)
 	basename = os.path.splitext(filename)[0]
 	resized_path = os.path.join(resized_dir, filename)
-	if os.path.exists(input_path) and not os.stat(input_path).st_size == 0:
-		duration = get_audio_duration(input_path)
-		if duration < target_duration:
-			extend_silence(
-				target_duration - duration, input_path, resized_path, sample_rate
-			)
-			duration = target_duration
-		else:
-			copy_audio(input_path, resized_path, sample_rate)
+	duration = get_audio_duration(input_path)
+	if duration > 0 and duration < target_duration:
+		extend_silence(
+			target_duration - duration, input_path, resized_path, sample_rate
+		)
+		duration = target_duration
+	elif duration >= target_duration:
+		copy_audio(input_path, resized_path, sample_rate)
 	else:
 		create_silence(target_duration, resized_path, sample_rate)
 		duration = target_duration
@@ -197,26 +199,6 @@ def render_audio(input_dir, render_dir, sample_rate):
 	subprocess.run(cmd)
 
 
-def add_transitions(input_dir, transition_duration):
-	if transition_duration:
-		path = os.path.join(input_dir, "durations.json")
-		with open(path, "r") as f:
-			durations = OrderedDict(json.load(f))
-		transition = "0000000"
-		new_durations = OrderedDict()
-		keys = list(durations.keys())
-		for i in range(len(keys)):
-			key = keys[i]
-			new_durations[key] = durations[key]
-			if i < len(keys) - 1:
-				prefix = key[:4]
-				next_prefix = keys[i + 1][:4]
-				if prefix != next_prefix:
-					new_durations[transition] = transition_duration
-		with open(path, "w") as f:
-			json.dump(new_durations, f, indent="\t", ensure_ascii=False)
-
-
 if __name__ == "__main__":
 	audios = sorted(
 		[
@@ -241,7 +223,6 @@ if __name__ == "__main__":
 		]
 		pool.starmap_async(batch_set_audio_duration, args).get()
 	merge_duration_json(DIRS["merge"], DIRS["image_durations"])
-	add_transitions(DIRS["merge"], TRANSITION_DURATION)
 	calculate_total_duration(DIRS["merge"])
 	create_audio_list(
 		audios,
