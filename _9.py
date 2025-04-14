@@ -1,6 +1,3 @@
-# Modify to make the silence created proportional to the possible duration of missing audio by reading the text length
-# Make the transition duration work for scroll
-# Fix missing audio
 from _0 import DIRS
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
@@ -108,7 +105,7 @@ def set_audio_duration(
 	basename = os.path.splitext(filename)[0]
 	resized_path = os.path.join(resized_dir, filename)
 	duration = get_audio_duration(input_path)
-	if duration > 0 and duration < target_duration:
+	if 0 < duration < target_duration:
 		extend_silence(
 			target_duration - duration, input_path, resized_path, sample_rate
 		)
@@ -128,6 +125,23 @@ def batch_set_audio_duration(
 		set_audio_duration(
 			filename, input_dir, resized_dir, output_dir, sample_rate, target_duration
 		)
+
+
+def create_transition_files(
+	audios, resized_dir, duration_dir, transition_duration, sample_rate
+):
+	if transition_duration == 0:
+		return
+	previous_prefix = None
+	for i, filename in enumerate(audios):
+		current_prefix = filename[:4]
+		if i > 0 and current_prefix != previous_prefix:
+			basename = f"{current_prefix}000"
+			filename = f"{basename}.wav"
+			transition_path = os.path.join(resized_dir, filename)
+			create_silence(transition_duration, transition_path, sample_rate)
+			save_duration_json(basename, transition_duration, duration_dir)
+		previous_prefix = current_prefix
 
 
 def merge_duration_json(output_dir, input_dir):
@@ -156,17 +170,12 @@ def calculate_total_duration(input_dir):
 		f.write(str(total))
 
 
-def create_audio_list(audios, input_dir, output_dir, sample_rate, transition_duration):
+def create_audio_list(audios, input_dir, output_dir):
 	output_path = os.path.join(output_dir, "audio_list.txt")
-	transition_path = os.path.abspath(os.path.join(input_dir, "0000000.wav"))
-	if transition_duration != 0:
-		create_silence(transition_duration, transition_path, sample_rate)
 	with open(output_path, "w") as f:
 		for i, filename in enumerate(audios):
 			abs_path = os.path.abspath(os.path.join(input_dir, filename))
 			f.write(f"file '{abs_path}'\n")
-			if transition_duration != 0 and i < len(audios) - 1:
-				f.write(f"file '{transition_path}'\n")
 
 
 def render_audio(input_dir, render_dir, sample_rate):
@@ -222,13 +231,32 @@ if __name__ == "__main__":
 			for batch in batches
 		]
 		pool.starmap_async(batch_set_audio_duration, args).get()
+	audios = sorted(
+		[
+			f
+			for f in os.listdir(DIRS["image_audio_resized"])
+			if f.lower().endswith(".wav")
+		]
+	)
+	create_transition_files(
+		audios,
+		DIRS["image_audio_resized"],
+		DIRS["image_durations"],
+		TRANSITION_DURATION,
+		SAMPLE_RATE,
+	)
 	merge_duration_json(DIRS["merge"], DIRS["image_durations"])
 	calculate_total_duration(DIRS["merge"])
+	audios = sorted(
+		[
+			f
+			for f in os.listdir(DIRS["image_audio_resized"])
+			if f.lower().endswith(".wav")
+		]
+	)
 	create_audio_list(
 		audios,
 		DIRS["image_audio_resized"],
 		DIRS["merge"],
-		SAMPLE_RATE,
-		TRANSITION_DURATION,
 	)
 	render_audio(DIRS["merge"], DIRS["render"], SAMPLE_RATE)
