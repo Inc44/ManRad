@@ -46,11 +46,11 @@ if __name__ == "__main__":
 		deleted_images = sorted(list(images_paths - resized_images_paths))
 		images = sorted(list(images_paths))
 		with open(deleted_images_path, "w") as f:
-			json.dump(deleted_images, f, indent="\t")
+			json.dump(deleted_images, f, indent="\t", ensure_ascii=False)
 		with open(images_path, "w") as f:
-			json.dump(images, f, indent="\t")
+			json.dump(images, f, indent="\t", ensure_ascii=False)
 		with open(kept_images_path, "w") as f:
-			json.dump(kept_images, f, indent="\t")
+			json.dump(kept_images, f, indent="\t", ensure_ascii=False)
 	elif mode == "delete":
 		if not os.path.exists(deleted_images_path):
 			exit()
