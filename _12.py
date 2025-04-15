@@ -73,45 +73,43 @@ def render_media(render_dir):
 
 
 if __name__ == "__main__":
-	path = os.path.join(DIRS["merge"], "page_durations.json")
-	with open(path) as f:
-		page_durations = json.load(f)
-	path = os.path.join(DIRS["merge"], "fade_video_list.txt")
-	keys = sorted(page_durations.keys())
 	input_dir = DIRS["image_resized_fit"]
 	output_dir = DIRS["image_resized_fit_fade"]
 	merge_dir = DIRS["merge"]
 	render_dir = DIRS["render"]
 	target_fps = TARGET_FPS
+	path = os.path.join(merge_dir, "page_durations.json")
+	with open(path) as f:
+		page_durations = json.load(f)
+	path = os.path.join(merge_dir, "fade_video_list.txt")
+	keys = sorted(page_durations.keys())
 	with open(path, "w") as f:
-		for key in keys:
+		for i, key in enumerate(keys):
 			duration = page_durations[key]
-			input_prefix1 = key[:4]
-			input_prefix2 = next(key)[:4]
-			input_path1 = os.path.join(input_dir, f"{input_prefix1}.jpg")
-			input_path2 = os.path.join(input_dir, f"{input_prefix2}.jpg")
-			if key[4:] == "000":
+			prefix = key[:4]
+			suffix = key[4:]
+			input_path1 = os.path.join(input_dir, f"{prefix}.jpg")
+			if suffix in ["000", "001"]:
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {1 / target_fps}\n")
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {duration - 1 / target_fps}\n")
-			if key[4:] == "001":
-				f.write(f"file '{os.path.abspath(input_path1)}'\n")
-				f.write(f"duration {1 / target_fps}\n")
-				f.write(f"file '{os.path.abspath(input_path1)}'\n")
-				f.write(f"duration {duration - 1 / target_fps}\n")
-			if key[4:] == "999":
-				fade_images(
-					input_path1,
-					input_path2,
-					output_dir,
-					target_fps,
-					duration,
-				)
-				frames = int(target_fps * duration)
-				for i in range(frames):
-					path = os.path.join(output_dir, f"{input_prefix1}{i:03d}.jpg")
-					f.write(f"file '{os.path.abspath(path)}'\n")
-					f.write(f"duration {duration/frames}\n")
+			elif suffix == "999":
+				if i + 1 < len(keys):
+					next_key = keys[i + 1]
+					next_prefix = next_key[:4]
+					input_path2 = os.path.join(input_dir, f"{next_prefix}.jpg")
+					fade_images(
+						input_path1,
+						input_path2,
+						output_dir,
+						target_fps,
+						duration,
+					)
+					frames = int(target_fps * duration)
+					for i in range(frames):
+						path = os.path.join(output_dir, f"{prefix}{i:03d}.jpg")
+						f.write(f"file '{os.path.abspath(path)}'\n")
+						f.write(f"duration {duration / frames}\n")
 	render_fade_video(merge_dir, render_dir)
 	render_media(render_dir)
