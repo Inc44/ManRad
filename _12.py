@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 
+DELAY_DURATION = 2
 TARGET_FPS = 60
 TARGET_HEIGHT = 1292
 TARGET_WIDTH = 900
@@ -111,5 +112,11 @@ if __name__ == "__main__":
 						path = os.path.join(output_dir, f"{prefix}{i:03d}.jpg")
 						f.write(f"file '{os.path.abspath(path)}'\n")
 						f.write(f"duration {duration / frames}\n")
+		f.write(f"file '{os.path.abspath(path)}'\n")
+		f.write(f"duration {1 / target_fps}\n")
+		f.write(f"file '{os.path.abspath(path)}'\n")
+		f.write(f"duration {DELAY_DURATION - 1 / target_fps}\n")
+		f.write(f"file '{os.path.abspath(path)}'\n")
+		f.write(f"duration {1 / target_fps}\n")
 	render_fade_video(merge_dir, render_dir)
 	render_media(render_dir)
