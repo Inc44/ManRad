@@ -35,7 +35,7 @@ if __name__ == "__main__":
 			current_prefix = prefix
 			current_sum = 0.0
 		if suffix == "000":
-			transition_key = f"{prefix}t"
+			transition_key = f"{int(prefix) - 1:04d}t"
 			summed_durations[transition_key] = float(durations[key])
 		else:
 			current_sum = current_sum + float(durations[key])

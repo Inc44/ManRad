@@ -90,17 +90,17 @@ if __name__ == "__main__":
 			input_prefix2 = f"{int(input_prefix1) + 1:04d}"
 			input_path1 = os.path.join(input_dir, f"{input_prefix1}.jpg")
 			input_path2 = os.path.join(input_dir, f"{input_prefix2}.jpg")
-			if key == keys[0]:
+			if key[4:] == "d":
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {1 / target_fps}\n")
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {duration - 1 / target_fps}\n")
-			if key[4:7] == "999":
+			if key[4:] == "s":
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {1 / target_fps}\n")
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {duration - 1 / target_fps}\n")
-			elif key[4:7] == "000" and key != keys[-2]:
+			if key[4:] == "t":
 				fade_images(
 					input_path1,
 					input_path2,
