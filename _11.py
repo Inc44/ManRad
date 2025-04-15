@@ -1,117 +1,47 @@
 from _0 import DIRS
-import cv2
 import json
 import os
-import subprocess
-
-TARGET_FPS = 60
-TARGET_HEIGHT = 1292
-TARGET_WIDTH = 900
-WORKERS = 6
-
-
-def fade_images(input_path1, input_path2, output_dir, target_fps, transition_duration):
-	image1 = cv2.imread(input_path1)
-	image2 = cv2.imread(input_path2)
-	frames = int(target_fps * transition_duration)
-	input_stem1 = os.path.splitext(os.path.basename(input_path1))[0]
-	for i in range(frames):
-		alpha = i / (frames - 1)
-		blended_image = cv2.addWeighted(image1, 1 - alpha, image2, alpha, 0)
-		cv2.imwrite(
-			os.path.join(output_dir, f"{input_stem1}{i:03d}.jpg"),
-			blended_image,
-			[cv2.IMWRITE_JPEG_QUALITY, 100],
-		)
-
-
-def render_fade_video(input_dir, output_dir):
-	input_path = os.path.join(input_dir, "fade_video_list.txt")
-	output_path = os.path.join(output_dir, "fade_video.mkv")
-	cmd = [
-		"ffmpeg",
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-f",
-		"concat",
-		"-safe",
-		"0",
-		"-i",
-		input_path,
-		"-fps_mode",
-		"vfr",
-		"-c:v",
-		"libx264",
-		"-preset",
-		"medium",
-		output_path,
-	]
-	subprocess.run(cmd)
-
-
-def render_media(render_dir):
-	video_path = os.path.join(render_dir, "fade_video.mkv")
-	audio_path = os.path.join(render_dir, "audio.opus")
-	render_path = os.path.join(render_dir, "ManRad.mkv")
-	cmd = [
-		"ffmpeg",
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-i",
-		video_path,
-		"-i",
-		audio_path,
-		"-c",
-		"copy",
-		render_path,
-	]
-	subprocess.run(cmd)
 
 
 if __name__ == "__main__":
-	path = os.path.join(DIRS["merge"], "summed_durations.json")
-	with open(path) as f:
+	input_path = os.path.join(DIRS["merge"], "durations.json")
+	output_path = os.path.join(DIRS["merge"], "summed_durations.json")
+	with open(input_path) as f:
 		durations = json.load(f)
-	path = os.path.join(DIRS["merge"], "fade_video_list.txt")
+	summed_durations = {}
+	current_sum = 0.0
+	current_prefix = None
 	keys = sorted(durations.keys())
-	input_dir = DIRS["image_resized_fit"]
-	output_dir = DIRS["image_resized_fit_fade"]
-	merge_dir = DIRS["merge"]
-	render_dir = DIRS["render"]
-	target_fps = TARGET_FPS
-	with open(path, "w") as f:
-		for key in keys:
-			duration = durations[key]
-			input_prefix1 = key[:4]
-			input_prefix2 = f"{int(input_prefix1) + 1:04d}"
-			input_path1 = os.path.join(input_dir, f"{input_prefix1}.jpg")
-			input_path2 = os.path.join(input_dir, f"{input_prefix2}.jpg")
-			if key[4:] == "d":
-				f.write(f"file '{os.path.abspath(input_path1)}'\n")
-				f.write(f"duration {1 / target_fps}\n")
-				f.write(f"file '{os.path.abspath(input_path1)}'\n")
-				f.write(f"duration {duration - 1 / target_fps}\n")
-			if key[4:] == "s":
-				f.write(f"file '{os.path.abspath(input_path1)}'\n")
-				f.write(f"duration {1 / target_fps}\n")
-				f.write(f"file '{os.path.abspath(input_path1)}'\n")
-				f.write(f"duration {duration - 1 / target_fps}\n")
-			if key[4:] == "t":
-				fade_images(
-					input_path1,
-					input_path2,
-					output_dir,
-					target_fps,
-					duration,
-				)
-				frames = int(target_fps * duration)
-				for i in range(frames):
-					path = os.path.join(output_dir, f"{input_prefix1}{i:03d}.jpg")
-					f.write(f"file '{os.path.abspath(path)}'\n")
-					f.write(f"duration {duration/frames}\n")
-	render_fade_video(merge_dir, render_dir)
-	render_media(render_dir)
+	keys_length = len(keys)
+	start = 0
+	if keys_length > 0:
+		key = keys[0]
+		prefix = key[:4]
+		suffix = key[4:]
+		if suffix == "000":
+			delay_key = f"{prefix}d"
+			summed_durations[delay_key] = float(durations[key])
+			start = 1
+			current_prefix = prefix
+	for i in range(start, keys_length):
+		key = keys[i]
+		prefix = key[:4]
+		suffix = key[4:]
+		if prefix != current_prefix:
+			if current_prefix is not None:
+				if current_sum > 0.0:
+					static_key = f"{current_prefix}s"
+					summed_durations[static_key] = current_sum
+			current_prefix = prefix
+			current_sum = 0.0
+		if suffix == "000":
+			transition_key = f"{int(prefix) - 1:04d}t"
+			summed_durations[transition_key] = float(durations[key])
+		else:
+			current_sum = current_sum + float(durations[key])
+	if current_prefix is not None:
+		if current_sum > 0.0:
+			last_static_key = f"{current_prefix}s"
+			summed_durations[last_static_key] = current_sum
+	with open(output_path, "w") as f:
+		json.dump(summed_durations, f, indent="\t", ensure_ascii=False)
