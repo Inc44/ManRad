@@ -87,20 +87,20 @@ if __name__ == "__main__":
 		for key in keys:
 			duration = page_durations[key]
 			input_prefix1 = key[:4]
-			input_prefix2 = f"{int(input_prefix1) + 1:04d}"
+			input_prefix2 = next(key)[:4]
 			input_path1 = os.path.join(input_dir, f"{input_prefix1}.jpg")
 			input_path2 = os.path.join(input_dir, f"{input_prefix2}.jpg")
-			if key[4:] == "d":
+			if key[4:] == "000":
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {1 / target_fps}\n")
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {duration - 1 / target_fps}\n")
-			if key[4:] == "s":
+			if key[4:] == "001":
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {1 / target_fps}\n")
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {duration - 1 / target_fps}\n")
-			if key[4:] == "t":
+			if key[4:] == "999":
 				fade_images(
 					input_path1,
 					input_path2,

@@ -137,7 +137,7 @@ def create_transition_files(
 	for i, filename in enumerate(audios):
 		current_prefix = filename[:4]
 		if i > 0 and current_prefix != previous_prefix:
-			basename = f"{current_prefix}000"
+			basename = f"{previous_prefix}999"
 			filename = f"{basename}.wav"
 			transition_path = os.path.join(resized_dir, filename)
 			create_silence(transition_duration, transition_path, sample_rate)
