@@ -25,7 +25,7 @@ def natural_sort(text):
 def extract_archive(output_dir, prefix, zip_path):
 	if not zipfile.is_zipfile(zip_path):
 		return
-	with zipfile.ZipFile(zip_path, "r") as z:
+	with zipfile.ZipFile(zip_path) as z:
 		for info in z.infolist():
 			basename = os.path.basename(info.filename)
 			filename = f"{prefix:04d}_{basename}"

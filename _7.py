@@ -20,7 +20,7 @@ WORKERS = 6
 
 
 def parse_text_json(max_tokens, path):
-	with open(path, "r", encoding="utf-8") as f:
+	with open(path, encoding="utf-8") as f:
 		data = json.load(f)
 	if isinstance(data, list):
 		text = " ".join(item.get("text", "") for item in data if isinstance(item, dict))
@@ -62,7 +62,7 @@ def text_to_audio(
 	text = parse_text_json(max_tokens, path)
 	if len(text) == 0:
 		return
-	with open(reference_text_path, "r", encoding="utf-8") as f:
+	with open(reference_text_path, encoding="utf-8") as f:
 		reference_text = f.read().strip()
 	with open(reference_audio_path, "rb") as f:
 		reference_audio = base64.b64encode(f.read()).decode()

@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 class ImgSet(Dataset):
 	def __init__(self, dir, file, tfm=None):
 		self.dir = dir
-		with open(file, "r") as f:
+		with open(file) as f:
 			self.imgs = json.load(f)
 		self.tfm = tfm
 		self.label = 1 if "manga" in os.path.basename(file) else 0

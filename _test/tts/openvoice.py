@@ -22,7 +22,7 @@ TIMEOUT = 999
 
 
 def read_json(path):
-	with open(path, "r", encoding="utf-8") as f:
+	with open(path, encoding="utf-8") as f:
 		data = json.load(f)
 	if isinstance(data, list):
 		return " ".join(

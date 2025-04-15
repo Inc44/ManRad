@@ -161,7 +161,7 @@ def merge_duration_json(output_dir, input_dir):
 	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
 	for filename in files:
 		path = os.path.join(input_dir, filename)
-		with open(path, "r") as f:
+		with open(path) as f:
 			duration = json.load(f)
 		for key, value in duration.items():
 			durations[key] = value
@@ -172,7 +172,7 @@ def merge_duration_json(output_dir, input_dir):
 
 def calculate_total_duration(input_dir):
 	path = os.path.join(input_dir, "durations.json")
-	with open(path, "r") as f:
+	with open(path) as f:
 		durations = json.load(f)
 	total = 0
 	for i in durations.values():

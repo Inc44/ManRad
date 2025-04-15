@@ -302,9 +302,9 @@ def generate_scrolling_video(
 		return 0
 	vertical_change_data = {}
 	segment_duration_data = {}
-	with open(vertical_change_data_path, "r") as delta_file:
+	with open(vertical_change_data_path) as delta_file:
 		vertical_change_data = json.load(delta_file)
-	with open(segment_duration_data_path, "r") as duration_file:
+	with open(segment_duration_data_path) as duration_file:
 		segment_duration_data = json.load(duration_file)
 	segment_identifiers = sorted(vertical_change_data.keys())
 	duration_keys = set(segment_duration_data.keys())

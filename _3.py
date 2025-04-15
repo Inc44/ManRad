@@ -54,7 +54,7 @@ if __name__ == "__main__":
 	elif mode == "delete":
 		if not os.path.exists(deleted_images_path):
 			exit()
-		with open(deleted_images_path, "r") as f:
+		with open(deleted_images_path) as f:
 			deleted_images = json.load(f)
 		for basename in deleted_images:
 			filename = get_filename(resized_images_dir, basename)

@@ -254,7 +254,7 @@ def merge_gaps_json(output_dir, input_dir):
 	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
 	for filename in files:
 		path = os.path.join(input_dir, filename)
-		with open(path, "r") as f:
+		with open(path) as f:
 			gap = json.load(f)
 		for key, value in gap.items():
 			data[key] = value
