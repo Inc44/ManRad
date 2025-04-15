@@ -292,10 +292,8 @@ def generate_scrolling_video(
 	if not image_specs or source_width <= 0:
 		return 0
 	v_start_list = [meta["vertical_start_position"] for meta in image_specs]
-	vertical_change_data_path = os.path.join(
-		output_directory, "delta_durations_same_width.json"
-	)
-	segment_duration_data_path = os.path.join(output_directory, "audio_durations.json")
+	vertical_change_data_path = os.path.join(output_directory, "gaps.json")
+	segment_duration_data_path = os.path.join(output_directory, "durations.json")
 	if not os.path.exists(vertical_change_data_path) or not os.path.exists(
 		segment_duration_data_path
 	):
@@ -370,14 +368,14 @@ def generate_scrolling_video(
 
 
 if __name__ == "__main__":
-	IMAGE_DIRECTORY = "img_same_width"
-	OUTPUT_DIRECTORY = "output"
-	OUTPUT_FILENAME = "scroll.mkv"
-	OUTPUT_FRAME_HEIGHT = 1000
+	IMAGE_DIRECTORY = "image_resized_fit"
+	OUTPUT_DIRECTORY = "render"
+	OUTPUT_FILENAME = "scroll_video.mkv"
+	OUTPUT_FRAME_HEIGHT = 1292
 	VIDEO_FPS = 60
-	INTRO_HOLD_TIME = 0.0
-	delta_json_path = os.path.join(OUTPUT_DIRECTORY, "delta_durations.json")
-	duration_json_path = os.path.join(OUTPUT_DIRECTORY, "audio_durations.json")
+	INTRO_HOLD_TIME = 1
+	delta_json_path = os.path.join(OUTPUT_DIRECTORY, "gaps.json")
+	duration_json_path = os.path.join(OUTPUT_DIRECTORY, "durations.json")
 	generated_frame_count = generate_scrolling_video(
 		source_image_directory=IMAGE_DIRECTORY,
 		output_directory=OUTPUT_DIRECTORY,
