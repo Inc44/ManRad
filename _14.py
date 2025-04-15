@@ -234,7 +234,7 @@ def process_scroll_segment(
 
 
 def render_media(render_dir):
-	video_path = os.path.join(render_dir, "fade_video.mkv")
+	video_path = os.path.join(render_dir, "scroll_video.mkv")
 	audio_path = os.path.join(render_dir, "audio.opus")
 	render_path = os.path.join(render_dir, "ManRadScroll.mkv")
 	cmd = [
