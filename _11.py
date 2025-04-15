@@ -5,11 +5,11 @@ import os
 
 if __name__ == "__main__":
 	input_path = os.path.join(DIRS["merge"], "durations.json")
-	output_path = os.path.join(DIRS["merge"], "summed_durations.json")
+	output_path = os.path.join(DIRS["merge"], "page_durations.json")
 	with open(input_path) as f:
 		durations = json.load(f)
-	summed_durations = {}
-	current_sum = 0.0
+	page_durations = {}
+	current_page = 0.0
 	current_prefix = None
 	keys = sorted(durations.keys())
 	keys_length = len(keys)
@@ -20,7 +20,7 @@ if __name__ == "__main__":
 		suffix = key[4:]
 		if suffix == "000":
 			delay_key = f"{prefix}d"
-			summed_durations[delay_key] = float(durations[key])
+			page_durations[delay_key] = float(durations[key])
 			start = 1
 			current_prefix = prefix
 	for i in range(start, keys_length):
@@ -29,19 +29,19 @@ if __name__ == "__main__":
 		suffix = key[4:]
 		if prefix != current_prefix:
 			if current_prefix is not None:
-				if current_sum > 0.0:
+				if current_page > 0.0:
 					static_key = f"{current_prefix}s"
-					summed_durations[static_key] = current_sum
+					page_durations[static_key] = current_page
 			current_prefix = prefix
-			current_sum = 0.0
+			current_page = 0.0
 		if suffix == "000":
 			transition_key = f"{int(prefix) - 1:04d}t"
-			summed_durations[transition_key] = float(durations[key])
+			page_durations[transition_key] = float(durations[key])
 		else:
-			current_sum = current_sum + float(durations[key])
+			current_page = current_page + float(durations[key])
 	if current_prefix is not None:
-		if current_sum > 0.0:
+		if current_page > 0.0:
 			last_static_key = f"{current_prefix}s"
-			summed_durations[last_static_key] = current_sum
+			page_durations[last_static_key] = current_page
 	with open(output_path, "w") as f:
-		json.dump(summed_durations, f, indent="\t", ensure_ascii=False)
+		json.dump(page_durations, f, indent="\t", ensure_ascii=False)

@@ -73,11 +73,11 @@ def render_media(render_dir):
 
 
 if __name__ == "__main__":
-	path = os.path.join(DIRS["merge"], "summed_durations.json")
+	path = os.path.join(DIRS["merge"], "page_durations.json")
 	with open(path) as f:
-		durations = json.load(f)
+		page_durations = json.load(f)
 	path = os.path.join(DIRS["merge"], "fade_video_list.txt")
-	keys = sorted(durations.keys())
+	keys = sorted(page_durations.keys())
 	input_dir = DIRS["image_resized_fit"]
 	output_dir = DIRS["image_resized_fit_fade"]
 	merge_dir = DIRS["merge"]
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 	target_fps = TARGET_FPS
 	with open(path, "w") as f:
 		for key in keys:
-			duration = durations[key]
+			duration = page_durations[key]
 			input_prefix1 = key[:4]
 			input_prefix2 = f"{int(input_prefix1) + 1:04d}"
 			input_path1 = os.path.join(input_dir, f"{input_prefix1}.jpg")
