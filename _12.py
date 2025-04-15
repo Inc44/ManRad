@@ -55,7 +55,7 @@ def render_fade_video(input_dir, output_dir):
 def render_media(render_dir):
 	video_path = os.path.join(render_dir, "fade_video.mkv")
 	audio_path = os.path.join(render_dir, "audio.opus")
-	render_path = os.path.join(render_dir, "ManRad.mkv")
+	render_path = os.path.join(render_dir, "ManRadFade.mkv")
 	cmd = [
 		"ffmpeg",
 		"-y",

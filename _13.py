@@ -233,15 +233,36 @@ def process_scroll_segment(
 	return final_vertical_position
 
 
+def render_media(render_dir):
+	video_path = os.path.join(render_dir, "fade_video.mkv")
+	audio_path = os.path.join(render_dir, "audio.opus")
+	render_path = os.path.join(render_dir, "ManRadScroll.mkv")
+	cmd = [
+		"ffmpeg",
+		"-y",
+		"-hide_banner",
+		"-loglevel",
+		"error",
+		"-i",
+		video_path,
+		"-i",
+		audio_path,
+		"-c",
+		"copy",
+		render_path,
+	]
+	subprocess.run(cmd)
+
+
 if __name__ == "__main__":
 	source_image_directory = DIRS["image_resized_fit"]
-	output_directory = DIRS["render"]
+	render_dir = DIRS["render"]
 	output_video_filename = "scroll_video.mkv"
 	intro_hold_duration_seconds = DELAY_DURATION
 	output_video_height_pixels = TARGET_HEIGHT
 	frames_per_second = TARGET_FPS
 	output_video_width_pixels = TARGET_WIDTH
-	output_video_path = os.path.join(output_directory, output_video_filename)
+	output_video_path = os.path.join(render_dir, output_video_filename)
 	vertical_change_data_path = os.path.join(DIRS["merge"], "transition_gaps.json")
 	segment_duration_data_path = os.path.join(DIRS["merge"], "durations.json")
 	image_metadata, total_content_height = frames_list(source_image_directory)
@@ -313,3 +334,4 @@ if __name__ == "__main__":
 	if encoder_process.stdin:
 		encoder_process.stdin.close()
 	encoder_exit_code = encoder_process.wait()
+	render_media(render_dir)
