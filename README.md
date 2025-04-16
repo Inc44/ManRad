@@ -4,6 +4,9 @@ Set your API keys as environment variables:
 ```batch
 setx /M DEEPINFRA_API_KEY ""
 setx /M GEMINI_API_KEY ""
+setx /M LEMON_API_KEY ""
+setx /M MELO_API_KEY ""
+setx /M MISTRAL_API_KEY ""
 setx /M OPENAI_API_KEY ""
 ```
 
@@ -11,6 +14,9 @@ Verify that your environment variables are set:
 ```batch
 echo %DEEPINFRA_API_KEY%
 echo %GEMINI_API_KEY%
+echo %LEMON_API_KEY%
+echo %MELO_API_KEY%
+echo %MISTRAL_API_KEY%
 echo %OPENAI_API_KEY%
 ```
 
@@ -40,14 +46,25 @@ python -OO _6.py
 python -OO _7.py
 python -OO _8.py
 python -OO _9.py
+python -OO _10.py
+python -OO _11.py
+python -OO _12.py
+python -OO _13.py
+python -OO _14.py
 ```
 
 ## Not Implemented / Failed Features
 
-- Camera movement
-- Neural network classifier for manga pages
-- Translation
-- Zoom bouncing
+- Autodetect target height and width using the most common dimensions of images.
+- Camera movement.
+- Create a CLI menu using argparse to select actions with numbers 1 to 15 for individual actions and 0 for auto mode, with a note that it is recommended to define deleted_images.json in advance.
+- Create silent audio proportional to the possible duration of missing audio, calculated using the image text length.
+- Define the index of selected entries in lists.
+- Make the transition duration work for scrolling.
+- Neural network classifier for manga pages.
+- Return full-page text detection instead of crops as an option.
+- Translation.
+- Zoom bouncing.
 
 ## Manga Source
 

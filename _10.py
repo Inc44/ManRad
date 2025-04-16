@@ -1,4 +1,3 @@
-# Autodetect target height and width using most common dimensions
 import config
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
