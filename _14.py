@@ -48,15 +48,17 @@ def render_scroll_video(height, output_path, target_fps, width):
 		# "-vf",
 		# "mpdecimate",
 		"-c:v",
-		"h264_nvenc",
+		"h264_nvenc",  # hevc_nvenc av1_nvenc h264_qsv hevc_qsv av1_qsv libx264 libx265 libsvtav1
 		"-preset",
-		"p7",
+		"p7",  # ultrafast faster 13
 		"-rc",
 		"constqp",
-		"-profile:v",
-		"high",
+		# "-profile:v",
+		# "high",
 		"-g",
 		"999999",
+		# "-pix_fmt",
+		# "yuv420p",
 		output_path,
 	]
 	return subprocess.Popen(cmd, stdin=subprocess.PIPE)
