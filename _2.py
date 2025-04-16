@@ -1,12 +1,8 @@
-from _0 import DIRS
+from config import DIRS, IMAGE_EXTENSIONS, TARGET_WIDTH, WORKERS
 from multiprocessing import Pool, cpu_count
 import cv2
 import os
 import shutil
-
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-TARGET_WIDTH = 900
-WORKERS = 6
 
 
 def resize_image(filename, input_dir, output_dir, target_width):

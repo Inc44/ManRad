@@ -1,18 +1,9 @@
-from _0 import DIRS
+from config import ARCHIVE_EXTENSIONS, DIRS, IMAGE_EXTENSIONS, SOURCE_PATHS
 import os
 import regex
 import shutil
 import sys
 import zipfile
-
-SOURCE_PATHS = [
-	"Kage_no_Jitsuryokusha_ni_Naritakute_",  # Kotatsu CBZ or DIR
-	"Kage_no_Jitsuryokusha_ni_Naritakute_.zip",  # Kotatsu ZIP
-	"The Eminence in Shadow_001",  # HakuNeko Images
-	"The Eminence in Shadow_002",  # HakuNeko CBZ
-]
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-ARCHIVE_EXTENSIONS = {".cbz", ".zip"}
 
 
 def natural_sort(text):

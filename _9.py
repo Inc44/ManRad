@@ -1,15 +1,18 @@
-from _0 import DIRS
+from config import (
+	AUDIO,
+	AUDIO_LIST,
+	DELAY_DURATION,
+	DIRS,
+	SAMPLE_RATE,
+	TARGET_DURATION,
+	TRANSITION_DURATION,
+	WORKERS,
+)
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import json
 import os
 import subprocess
-
-DELAY_DURATION = 1
-SAMPLE_RATE = 48000
-TARGET_DURATION = 1
-TRANSITION_DURATION = 0.5
-WORKERS = 6
 
 
 def create_silence(duration, output_path, sample_rate):
@@ -182,17 +185,17 @@ def calculate_total_duration(input_dir):
 		f.write(str(total))
 
 
-def create_audio_list(audios, input_dir, output_dir):
-	output_path = os.path.join(output_dir, "audio_list.txt")
+def create_audio_list(audio_list, audios, input_dir, output_dir):
+	output_path = os.path.join(output_dir, audio_list)
 	with open(output_path, "w") as f:
 		for filename in audios:
 			path = os.path.join(input_dir, filename)
 			f.write(f"file '{os.path.abspath(path)}'\n")
 
 
-def render_audio(input_dir, render_dir, sample_rate):
-	path_input = os.path.join(input_dir, "audio_list.txt")
-	path_render = os.path.join(render_dir, "audio.opus")
+def render_audio(audio, audio_list, input_dir, render_dir, sample_rate):
+	path_input = os.path.join(input_dir, audio_list)
+	path_render = os.path.join(render_dir, audio)
 	cmd = [
 		"ffmpeg",
 		"-y",
@@ -281,8 +284,9 @@ if __name__ == "__main__":
 		]
 	)
 	create_audio_list(
+		AUDIO_LIST,
 		audios,
 		DIRS["image_audio_resized"],
 		DIRS["merge"],
 	)
-	render_audio(DIRS["merge"], DIRS["render"], SAMPLE_RATE)
+	render_audio(AUDIO, AUDIO_LIST, DIRS["merge"], DIRS["render"], SAMPLE_RATE)

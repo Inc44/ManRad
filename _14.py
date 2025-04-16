@@ -1,5 +1,15 @@
-from _0 import DIRS
-from _12 import DELAY_DURATION, TARGET_HEIGHT, TARGET_FPS, TARGET_WIDTH
+from config import (
+	AUDIO,
+	DELAY_DURATION,
+	DELAY_PERCENT,
+	DIRS,
+	MEDIA,
+	SCROLL_VIDEO,
+	TARGET_FPS,
+	TARGET_HEIGHT,
+	TARGET_WIDTH,
+)
+from _12 import render_media
 import bisect
 import cv2
 import functools
@@ -8,8 +18,6 @@ import math
 import numpy as np
 import os
 import subprocess
-
-DELAY_PERCENT = 0.42
 
 
 @functools.lru_cache(maxsize=2048)
@@ -244,27 +252,6 @@ def process_scroll_segment(
 	return final_focus_point
 
 
-def render_media(render_dir):
-	video_path = os.path.join(render_dir, "scroll_video.mkv")
-	audio_path = os.path.join(render_dir, "audio.opus")
-	render_path = os.path.join(render_dir, "ManRadScroll.mkv")
-	cmd = [
-		"ffmpeg",
-		"-y",
-		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-i",
-		video_path,
-		"-i",
-		audio_path,
-		"-c",
-		"copy",
-		render_path,
-	]
-	subprocess.run(cmd)
-
-
 if __name__ == "__main__":
 	source_image_directory = DIRS["image_resized_fit"]
 	render_dir = DIRS["render"]
@@ -346,4 +333,4 @@ if __name__ == "__main__":
 	if encoder_process.stdin:
 		encoder_process.stdin.close()
 	encoder_exit_code = encoder_process.wait()
-	render_media(render_dir)
+	render_media(AUDIO, MEDIA, render_dir, SCROLL_VIDEO)

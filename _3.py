@@ -1,11 +1,7 @@
-from _0 import DIRS
+from config import DELETED_IMAGES_PATH, DIRS, IMAGES_PATH, KEPT_IMAGES_PATH
 import json
 import os
 import sys
-
-DELETED_IMAGES_PATH = "deleted_images.json"
-IMAGES_PATH = "images.json"
-KEPT_IMAGES_PATH = "kept_images.json"
 
 
 def get_basenames(input_dir):
@@ -36,7 +32,7 @@ if __name__ == "__main__":
 	merge_dir = DIRS["merge"]
 	images_dir = DIRS["image"]
 	resized_images_dir = DIRS["image_resized"]
-	deleted_images_path = os.path.join(merge_dir, DELETED_IMAGES_PATH)
+	deleted_images_path = DELETED_IMAGES_PATH
 	images_path = os.path.join(merge_dir, IMAGES_PATH)
 	kept_images_path = os.path.join(merge_dir, KEPT_IMAGES_PATH)
 	if mode == "save":

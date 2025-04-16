@@ -1,4 +1,15 @@
-from _0 import DIRS
+from config import (
+	API_ENDPOINTS,
+	AUDIO_MIN_SIZE,
+	DIRS,
+	FISH_TEMPERATURE,
+	MAX_TOKENS,
+	PAUSE,
+	REFERENCE_AUDIO,
+	REFERENCE_TEXT,
+	RETRIES,
+	WORKERS,
+)
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import base64
@@ -7,16 +18,6 @@ import os
 import regex
 import requests
 import time
-
-API_ENDPOINT = "http://127.0.0.1:8080/v1/tts"
-MAX_TOKENS = 2000
-MIN_SIZE = 78
-PAUSE = 10
-REFERENCE_AUDIO = "_reference/reference_audio.flac"
-REFERENCE_TEXT = "_reference/reference_text.txt"
-RETRIES = 3
-TEMPERATURE = 0.1
-WORKERS = 6
 
 
 def parse_text_json(max_tokens, path):
@@ -138,18 +139,18 @@ if __name__ == "__main__":
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINT,
+				API_ENDPOINTS[0],
 				0,
 				batch,
 				DIRS["image_text"],
 				MAX_TOKENS,
-				MIN_SIZE,
+				AUDIO_MIN_SIZE,
 				DIRS["image_audio"],
 				PAUSE,
 				REFERENCE_AUDIO,
 				REFERENCE_TEXT,
 				RETRIES,
-				TEMPERATURE,
+				FISH_TEMPERATURE,
 			)
 			for batch in batches
 		]

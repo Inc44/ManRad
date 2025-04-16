@@ -1,4 +1,17 @@
-from _0 import DIRS
+from config import (
+	API_ENDPOINTS,
+	API_KEYS,
+	CONCURRENT_REQUESTS,
+	DIRS,
+	MAX_TOKENS,
+	MODEL,
+	PAUSE,
+	PROMPT,
+	RETRIES,
+	TEMPERATURE,
+	TEMPERATURE_STEP,
+	TEXT_MIN_SIZE,
+)
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import base64
@@ -7,19 +20,6 @@ import os
 import regex
 import requests
 import time
-
-API_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
-API_KEY = os.environ.get("DEEPINFRA_API_KEY")
-LANGUAGE = "English"
-MAX_TOKENS = 2000
-MIN_SIZE = 13
-MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
-PAUSE = 10
-PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any introductory phrases or additional commentary. If no readable text is found, the text content is empty. Return JSON: [{{"text": "text content"}}, ...]'
-RETRIES = 3
-TEMPERATURE = 0.0
-TEMPERATURE_STEP = 0.2
-WORKERS = 60
 
 
 def parse_json_text(string):
@@ -163,18 +163,18 @@ if __name__ == "__main__":
 	images = sorted(
 		[f for f in os.listdir(DIRS["image_crops"]) if f.lower().endswith(".jpg")]
 	)
-	workers = min(WORKERS, 10 * cpu_count())
+	workers = min(CONCURRENT_REQUESTS, 10 * cpu_count())
 	batches = split_batches(workers, images)
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINT,
-				API_KEY,
+				API_ENDPOINTS[2],
+				API_KEYS[1],
 				0,
 				batch,
 				DIRS["image_crops"],
 				MAX_TOKENS,
-				MIN_SIZE,
+				TEXT_MIN_SIZE,
 				MODEL,
 				DIRS["image_text"],
 				PAUSE,

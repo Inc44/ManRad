@@ -1,14 +1,8 @@
-from _0 import DIRS
+from config import AUDIO, DELAY_DURATION, DIRS, FADE_VIDEO, MEDIA, TARGET_FPS
 import cv2
 import json
 import os
 import subprocess
-
-DELAY_DURATION = 2
-TARGET_FPS = 60
-TARGET_HEIGHT = 1292
-TARGET_WIDTH = 900
-WORKERS = 6
 
 
 def fade_images(input_path1, input_path2, output_dir, target_fps, transition_duration):
@@ -52,10 +46,10 @@ def render_fade_video(input_dir, output_dir):
 	subprocess.run(cmd)
 
 
-def render_media(render_dir):
-	video_path = os.path.join(render_dir, "fade_video.mkv")
-	audio_path = os.path.join(render_dir, "audio.opus")
-	render_path = os.path.join(render_dir, "ManRadFade.mkv")
+def render_media(audio, media, render_dir, video):
+	video_path = os.path.join(render_dir, video)
+	audio_path = os.path.join(render_dir, audio)
+	render_path = os.path.join(render_dir, media)
 	cmd = [
 		"ffmpeg",
 		"-y",
@@ -119,4 +113,4 @@ if __name__ == "__main__":
 		f.write(f"file '{os.path.abspath(path)}'\n")
 		f.write(f"duration {1 / target_fps}\n")
 	render_fade_video(merge_dir, render_dir)
-	render_media(render_dir)
+	render_media(AUDIO, MEDIA, render_dir, FADE_VIDEO)

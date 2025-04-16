@@ -5,22 +5,12 @@ pip install seaborn
 ```
 
 ```
-pip install paddlepaddle-gpu==3.0.0rc1 -i https://www.paddlepaddle.org.cn/packages/stable/cu123
-pip install paddleocr
-```
-
-```
-setx /M LEMON_API_KEY ""
-echo %LEMON_API_KEY%
+setx /M API_KEY ""
+echo %API_KEY%
 ```
 
 ```
 docker run --gpus all -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-gpu:v0.2.2
-```
-
-```
-setx /M MELO_API_KEY ""
-echo %MELO_API_KEY%
 ```
 
 ```
@@ -41,24 +31,12 @@ pip install -U torch --index-url https://download.pytorch.org/whl/cu126
 pip install mistralai
 ```
 
-```
-setx /M MISTRAL_API_KEY ""
-echo %MISTRAL_API_KEY%
-```
 
 ```
 pip install edge-tts
 ```
 
 ```
-conda activate ManRad
-python -OO Audio.py
-conda activate paddle
-python -OO Delta.py
-conda activate ManRad
-python -OO Scroll.py
-ffmpeg -i output/scroll.mkv -i output/audio.opus -c copy output/result.mkv
-ffprobe -i output/audio.opus
-ffprobe -i output/scroll.mkv
-ffprobe -i output/result.mkv
+docker run -it --name fish-speech --gpus all -p 8080:8080 fishaudio/fish-speech:latest-dev zsh
+python -m tools.api_server --listen 0.0.0.0:8080 --compile
 ```

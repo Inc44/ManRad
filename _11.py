@@ -1,10 +1,6 @@
-from _0 import DIRS
+from config import DELAY_SUFFIX, DIRS, SUM_SUFFIX, TRANSITION_SUFFIX
 import json
 import os
-
-DELAY_SUFFIX = "000"
-SUM_SUFFIX = "001"
-TRANSITION_SUFFIX = "999"
 
 
 if __name__ == "__main__":

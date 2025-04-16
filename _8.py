@@ -1,46 +1,23 @@
-from _0 import DIRS
+from config import (
+	API_ENDPOINTS,
+	API_KEYS,
+	AUDIO_MIN_SIZE,
+	DIRS,
+	INSTRUCTIONS,
+	MAX_TOKENS,
+	MODELS,
+	PAUSE,
+	RESPONSE_FORMAT,
+	RETRIES,
+	VOICES,
+	WORKERS,
+)
 from _2 import split_batches
 from _7 import is_valid_audio, parse_text_json
 from multiprocessing import Pool, cpu_count
 import os
 import requests
 import time
-
-API_ENDPOINTS = [
-	"http://localhost:8880/v1/audio/speech",  # Kokoro
-	"https://api.lemonfox.ai/v1/audio/speech",  # Lemon
-	"https://api.openai.com/v1/audio/speech",  # OpenAI
-]
-API_KEYS = [
-	"not-needed",  # Kokoro
-	os.environ.get("LEMON_API_KEY"),  # Lemon
-	os.environ.get("OPENAI_API_KEY"),  # OpenAI
-]
-INSTRUCTIONS = [
-	"",
-	"Speak in an emotive and friendly tone... Read only if the text is in Russian",
-	"Speak with intonation and emotions in the given sentences from the intense manga.",
-]
-MAX_TOKENS = 2000
-MIN_SIZE = 78
-MODELS = [
-	"gpt-4o-mini-tts",  # OpenAI
-	"tts-1",  # Kokoro, Lemon, OpenAI
-	"tts-1-hd",  # OpenAI
-]
-PAUSE = 10
-RESPONSE_FORMAT = [
-	"mp3",  # OpenAI
-	"wav",  # Kokoro, Lemon, OpenAI
-]
-RETRIES = 3
-VOICES = [
-	"am_onyx",  # Kokoro
-	"ash",  # OpenAI
-	"onyx",  # Lemon, OpenAI
-	"sage",  # OpenAI
-]
-WORKERS = 6
 
 
 def text_to_audio(
@@ -136,14 +113,14 @@ if __name__ == "__main__":
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINTS[2],
-				API_KEYS[2],
+				API_ENDPOINTS[4],
+				API_KEYS[6],
 				0,
 				batch,
 				DIRS["image_text"],
 				INSTRUCTIONS[0],
 				MAX_TOKENS,
-				MIN_SIZE,
+				AUDIO_MIN_SIZE,
 				MODELS[1],
 				DIRS["image_audio"],
 				PAUSE,

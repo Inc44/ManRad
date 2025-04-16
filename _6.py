@@ -1,17 +1,18 @@
-from _0 import DIRS
+from config import (
+	COST_DEEPINFRA,
+	COST_GEMINI,
+	COST_GROQ,
+	COST_OPENAI,
+	COST_TTS,
+	DIRS,
+	ENCODING_NAME,
+	MAX_TOKENS,
+)
 from _7 import parse_text_json
 import cv2
 import json
 import os
 import tiktoken
-
-ENCODING_NAME = "cl100k_base"
-MAX_TOKENS = 2000
-COST_DEEPINFRA = (0.08, 0.30)
-COST_GEMINI = (0.10, 0.40)
-COST_GROQ = (0.90, 0.90)
-COST_OPENAI = (5.00, 15.00)
-COST_TTS = 15.0
 
 
 def calculate_gemini_tokens(path):

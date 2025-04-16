@@ -1,4 +1,4 @@
-from _0 import DIRS
+from config import DIRS
 import json
 import os
 

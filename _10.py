@@ -1,13 +1,10 @@
 # Autodetect target height and width using most common dimensions
-from _0 import DIRS
+from config import DIRS, TARGET_HEIGHT, WORKERS
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import cv2
 import os
 import shutil
-
-TARGET_HEIGHT = 1292
-WORKERS = 6
 
 
 def resize_fit_image(filename, input_dir, output_dir, target_height):

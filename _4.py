@@ -1,4 +1,4 @@
-from _0 import DIRS
+from config import DIRS, HEIGHT_RANGE, MARGIN, MAX_DISTANCE, WORKERS
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 from paddleocr import PaddleOCR, draw_ocr
@@ -6,11 +6,6 @@ import cv2
 import json
 import math
 import os
-
-HEIGHT_RANGE = 96
-MARGIN = 16
-MAX_DISTANCE = 32
-WORKERS = 6
 
 
 def get_box_bounds(box):
