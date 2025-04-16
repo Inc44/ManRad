@@ -1,4 +1,4 @@
-from config import DELETED_IMAGES_PATH, DIRS, IMAGES_PATH, KEPT_IMAGES_PATH
+import config
 import json
 import os
 import sys
@@ -14,7 +14,7 @@ def get_basenames(input_dir):
 	return basenames
 
 
-def get_filename(input_dir, basename):
+def get_filename(basename, input_dir):
 	if os.path.exists(input_dir):
 		for filename in os.listdir(input_dir):
 			if (
@@ -26,34 +26,40 @@ def get_filename(input_dir, basename):
 
 
 if __name__ == "__main__":
+	all_images_list_filename = config.ALL_IMAGES_LIST_FILENAME
+	deleted_images_list_filename = config.DELETED_IMAGES_LIST_FILENAME
+	dirs = config.DIRS
+	kept_images_list_filename = config.KEPT_IMAGES_LIST_FILENAME
 	mode = "delete"
 	if len(sys.argv) > 1:
 		mode = sys.argv[1]
-	merge_dir = DIRS["merge"]
-	images_dir = DIRS["image"]
-	resized_images_dir = DIRS["image_resized"]
-	deleted_images_path = DELETED_IMAGES_PATH
-	images_path = os.path.join(merge_dir, IMAGES_PATH)
-	kept_images_path = os.path.join(merge_dir, KEPT_IMAGES_PATH)
+	merge_dir = dirs["merge"]
+	images_dir = dirs["image"]
+	resized_images_dir = dirs["image_resized"]
+	deleted_images_path = os.path.join(merge_dir, deleted_images_list_filename)
+	images_path = os.path.join(merge_dir, all_images_list_filename)
+	kept_images_path = os.path.join(merge_dir, kept_images_list_filename)
 	if mode == "save":
-		images_paths = get_basenames(images_dir)
-		resized_images_paths = get_basenames(resized_images_dir)
-		kept_images = sorted(list(resized_images_paths))
-		deleted_images = sorted(list(images_paths - resized_images_paths))
-		images = sorted(list(images_paths))
+		images_basenames = get_basenames(images_dir)
+		resized_images_basenames = get_basenames(resized_images_dir)
+		kept_images = sorted(list(resized_images_basenames))
+		deleted_images = sorted(list(images_basenames - resized_images_basenames))
+		images = sorted(list(images_basenames))
 		with open(deleted_images_path, "w") as f:
-			json.dump(deleted_images, f, indent="\t", ensure_ascii=False)
+			json.dump(
+				deleted_images, f, indent="\t", ensure_ascii=False, sort_keys=True
+			)
 		with open(images_path, "w") as f:
-			json.dump(images, f, indent="\t", ensure_ascii=False)
+			json.dump(images, f, indent="\t", ensure_ascii=False, sort_keys=True)
 		with open(kept_images_path, "w") as f:
-			json.dump(kept_images, f, indent="\t", ensure_ascii=False)
+			json.dump(kept_images, f, indent="\t", ensure_ascii=False, sort_keys=True)
 	elif mode == "delete":
 		if not os.path.exists(deleted_images_path):
 			exit()
 		with open(deleted_images_path) as f:
 			deleted_images = json.load(f)
 		for basename in deleted_images:
-			filename = get_filename(resized_images_dir, basename)
+			filename = get_filename(basename, resized_images_dir)
 			if filename:
 				path = os.path.join(resized_images_dir, filename)
 				if os.path.exists(path):

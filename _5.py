@@ -1,17 +1,4 @@
-from config import (
-	API_ENDPOINTS,
-	API_KEYS,
-	CONCURRENT_REQUESTS,
-	DIRS,
-	MAX_TOKENS,
-	MODEL,
-	PAUSE,
-	PROMPT,
-	RETRIES,
-	TEMPERATURE,
-	TEMPERATURE_STEP,
-	TEXT_MIN_SIZE,
-)
+import config
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import base64
@@ -68,8 +55,6 @@ def image_to_text(
 	temperature,
 	temperature_step,
 ):
-	if attempt >= retries:
-		return []
 	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
 	text_filename = f"{basename}.json"
@@ -97,9 +82,10 @@ def image_to_text(
 		"seed": 42,
 		"temperature": temperature,
 	}
-	for attempt in range(attempt, retries):
+	current_temperature = temperature
+	for current_attempt in range(attempt, retries):
 		try:
-			payload["temperature"] = temperature
+			payload["temperature"] = current_temperature
 			response = requests.post(api_endpoint, headers=headers, json=payload)
 			if response.status_code == 200:
 				content = response.json()["choices"][0]["message"]["content"]
@@ -114,13 +100,19 @@ def image_to_text(
 						and all(isinstance(item, dict) for item in parsed)
 					):
 						with open(text_path, "w", encoding="utf-8") as f:
-							json.dump(parsed, f, indent="\t", ensure_ascii=False)
+							json.dump(
+								parsed,
+								f,
+								indent="\t",
+								ensure_ascii=False,
+								sort_keys=True,
+							)
 						return
 		except:
 			pass
-		if attempt < retries - 1:
-			sleep_time = pause * (2**attempt)
-			temperature += temperature_step
+		if current_attempt < retries - 1:
+			sleep_time = pause * (2**current_attempt)
+			current_temperature += temperature_step
 			time.sleep(sleep_time)
 
 
@@ -160,28 +152,45 @@ def batch_image_to_text(
 
 
 if __name__ == "__main__":
+	api_endpoints = config.API_ENDPOINTS
+	api_keys = config.API_KEYS
+	concurrent_requests = config.CONCURRENT_REQUESTS
+	dirs = config.DIRS
+	max_tokens = config.MAX_TOKENS
+	model = config.MODEL
+	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
+	pause = config.PAUSE
+	prompt = config.PROMPT
+	retries = config.RETRIES
+	temperature = config.TEMPERATURE
+	temperature_step = config.TEMPERATURE_STEP
+	text_min_size = config.TEXT_MIN_SIZE
 	images = sorted(
-		[f for f in os.listdir(DIRS["image_crops"]) if f.lower().endswith(".jpg")]
+		[
+			f
+			for f in os.listdir(dirs["image_crops"])
+			if f.lower().endswith(output_image_extension)
+		]
 	)
-	workers = min(CONCURRENT_REQUESTS, 10 * cpu_count())
-	batches = split_batches(workers, images)
+	workers = min(concurrent_requests, 25 * cpu_count())
+	batches = split_batches(images, workers)
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINTS[2],
-				API_KEYS[1],
+				api_endpoints[2],
+				api_keys[1],
 				0,
 				batch,
-				DIRS["image_crops"],
-				MAX_TOKENS,
-				TEXT_MIN_SIZE,
-				MODEL,
-				DIRS["image_text"],
-				PAUSE,
-				PROMPT,
-				RETRIES,
-				TEMPERATURE,
-				TEMPERATURE_STEP,
+				dirs["image_crops"],
+				max_tokens,
+				text_min_size,
+				model,
+				dirs["image_text"],
+				pause,
+				prompt,
+				retries,
+				temperature,
+				temperature_step,
 			)
 			for batch in batches
 		]

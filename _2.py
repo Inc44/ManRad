@@ -1,18 +1,18 @@
-from config import DIRS, IMAGE_EXTENSIONS, TARGET_WIDTH, WORKERS
+import config
 from multiprocessing import Pool, cpu_count
 import cv2
 import os
 import shutil
 
 
-def resize_image(filename, input_dir, output_dir, target_width):
+def resize_image(filename, input_dir, output_dir, output_image_extension, target_width):
 	path = os.path.join(input_dir, filename)
 	image = cv2.imread(path)
 	if image is None:
 		return
 	height, width = image.shape[:2]
 	basename = os.path.splitext(filename)[0]
-	output_path = os.path.join(output_dir, f"{basename}.jpg")
+	output_path = os.path.join(output_dir, f"{basename}{output_image_extension}")
 	if width == target_width and filename.lower().endswith((".jpg", ".jpeg")):
 		shutil.copy(path, output_path)
 		return
@@ -24,31 +24,46 @@ def resize_image(filename, input_dir, output_dir, target_width):
 	cv2.imwrite(output_path, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
 
-def split_batches(num_workers, items):
+def split_batches(items, num_workers):
 	batches = [[] for _ in range(num_workers)]
 	for i, item in enumerate(items):
 		batches[i % num_workers].append(item)
 	return batches
 
 
-def batch_resize_images(batch, input_dir, output_dir, target_width):
+def batch_resize_images(
+	batch, input_dir, output_dir, output_image_extension, target_width
+):
 	for filename in batch:
-		resize_image(filename, input_dir, output_dir, target_width)
+		resize_image(
+			filename, input_dir, output_dir, output_image_extension, target_width
+		)
 
 
 if __name__ == "__main__":
+	dirs = config.DIRS
+	image_extensions = config.IMAGE_EXTENSIONS
+	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
+	target_width = config.TARGET_WIDTH
+	workers_config = config.WORKERS
 	images = sorted(
 		[
 			f
-			for f in os.listdir(DIRS["image"])
-			if any(f.lower().endswith(ext) for ext in IMAGE_EXTENSIONS)
+			for f in os.listdir(dirs["image"])
+			if any(f.lower().endswith(ext) for ext in image_extensions)
 		]
 	)
-	workers = min(WORKERS, cpu_count())
-	batches = split_batches(workers, images)
+	workers = min(workers_config, cpu_count())
+	batches = split_batches(images, workers)
 	with Pool(processes=workers) as pool:
 		args = [
-			(batch, DIRS["image"], DIRS["image_resized"], TARGET_WIDTH)
+			(
+				batch,
+				dirs["image"],
+				dirs["image_resized"],
+				output_image_extension,
+				target_width,
+			)
 			for batch in batches
 		]
 		pool.starmap_async(batch_resize_images, args).get()

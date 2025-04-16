@@ -1,4 +1,4 @@
-from config import DIRS, HEIGHT_RANGE, MARGIN, MAX_DISTANCE, WORKERS
+import config
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 from paddleocr import PaddleOCR, draw_ocr
@@ -70,7 +70,7 @@ def get_bounds_and_centers(boxes, groups, margin):
 	return bounds, centers
 
 
-def get_priority(y_diff, corner_dist):
+def get_priority(corner_dist, y_diff):
 	return (y_diff * 3) + corner_dist
 
 
@@ -90,7 +90,7 @@ def order_boxes(bounds, centers, width):
 		scores = []
 		for i, corner_dist, y_pos in unprocessed:
 			y_diff = abs(y_pos - prev_y)
-			score = get_priority(y_diff, corner_dist)
+			score = get_priority(corner_dist, y_diff)
 			scores.append((i, score))
 		scores.sort(key=lambda x: x[1])
 		next_index = scores[0][0]
@@ -102,8 +102,8 @@ def order_boxes(bounds, centers, width):
 
 def draw_boxes(bounds, image, order):
 	image_copy = image.copy()
-	for i, box in enumerate(order):
-		x_min, y_min, x_max, y_max = bounds[box]
+	for i, box_index in enumerate(order):
+		x_min, y_min, x_max, y_max = bounds[box_index]
 		x_min, y_min, x_max, y_max = int(x_min), int(y_min), int(x_max), int(y_max)
 		red = (0, 0, 255)
 		cv2.rectangle(image_copy, (x_min, y_min), (x_max, y_max), red, 1)
@@ -119,16 +119,24 @@ def draw_boxes(bounds, image, order):
 	return image_copy
 
 
-def crop_images(basename, bounds, image, order, output_dir):
+def crop_images(
+	basename,
+	bounds,
+	crop_suffix_length,
+	image,
+	order,
+	output_dir,
+	output_image_extension,
+):
 	height, width = image.shape[:2]
-	for i, box in enumerate(order):
-		x_min, y_min, x_max, y_max = bounds[box]
+	for i, box_index in enumerate(order):
+		x_min, y_min, x_max, y_max = bounds[box_index]
 		x_min = max(0, int(x_min))
 		y_min = max(0, int(y_min))
 		x_max = min(width, int(x_max))
 		y_max = min(height, int(y_max))
 		crop = image[y_min:y_max, x_min:x_max]
-		filename = f"{basename}{i+1:03d}.jpg"
+		filename = f"{basename}{i+1:0{crop_suffix_length}d}{output_image_extension}"
 		path = os.path.join(output_dir, filename)
 		cv2.imwrite(path, crop, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
@@ -157,14 +165,14 @@ def get_gaps(bounds, height, height_range, order):
 	return gaps
 
 
-def save_gaps_json(basename, gaps, output_dir):
+def save_gaps_json(basename, crop_suffix_length, gaps, output_dir):
 	path = os.path.join(output_dir, f"{basename}.json")
 	data = {}
 	for i, gap in enumerate(gaps):
-		key = f"{basename}{i+1:03d}"
+		key = f"{basename}{i+1:0{crop_suffix_length}d}"
 		data[key] = gap
 	with open(path, "w") as f:
-		json.dump(data, f, indent="\t", ensure_ascii=False)
+		json.dump(data, f, indent="\t", ensure_ascii=False, sort_keys=True)
 
 
 def init_ocr_engine():
@@ -182,6 +190,7 @@ def init_ocr_engine():
 
 
 def detect_image(
+	crop_suffix_length,
 	filename,
 	height_range,
 	input_dir,
@@ -192,6 +201,7 @@ def detect_image(
 	output_dir_crops,
 	output_dir_gaps,
 	output_dir_group,
+	output_image_extension,
 ):
 	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
@@ -203,21 +213,30 @@ def detect_image(
 	image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 	image_box = draw_ocr(image_rgb, boxes)
 	image_box = cv2.cvtColor(image_box, cv2.COLOR_RGB2BGR)
-	path_box = os.path.join(output_dir_box, basename + ".jpg")
+	path_box = os.path.join(output_dir_box, basename + output_image_extension)
 	cv2.imwrite(path_box, image_box, [cv2.IMWRITE_JPEG_QUALITY, 100])
 	groups = group_boxes(boxes, max_distance)
 	bounds, centers = get_bounds_and_centers(boxes, groups, margin)
 	order = order_boxes(bounds, centers, image.shape[1])
 	image_group = draw_boxes(bounds, image, order)
-	path_group = os.path.join(output_dir_group, basename + ".jpg")
+	path_group = os.path.join(output_dir_group, basename + output_image_extension)
 	cv2.imwrite(path_group, image_group, [cv2.IMWRITE_JPEG_QUALITY, 100])
-	crop_images(basename, bounds, image, order, output_dir_crops)
+	crop_images(
+		basename,
+		bounds,
+		crop_suffix_length,
+		image,
+		order,
+		output_dir_crops,
+		output_image_extension,
+	)
 	gaps = get_gaps(bounds, image.shape[0], height_range, order)
-	save_gaps_json(basename, gaps, output_dir_gaps)
+	save_gaps_json(basename, crop_suffix_length, gaps, output_dir_gaps)
 
 
 def batch_detect_images(
 	batch,
+	crop_suffix_length,
 	height_range,
 	input_dir,
 	margin,
@@ -226,10 +245,12 @@ def batch_detect_images(
 	output_dir_crops,
 	output_dir_gaps,
 	output_dir_group,
+	output_image_extension,
 ):
 	ocr_engine = init_ocr_engine()
 	for filename in batch:
 		detect_image(
+			crop_suffix_length,
 			filename,
 			height_range,
 			input_dir,
@@ -240,10 +261,11 @@ def batch_detect_images(
 			output_dir_crops,
 			output_dir_gaps,
 			output_dir_group,
+			output_image_extension,
 		)
 
 
-def merge_gaps_json(output_dir, input_dir):
+def merge_gaps_json(input_dir, merged_gaps_filename, output_dir, total_gaps_filename):
 	data = {}
 	total = 0
 	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
@@ -254,34 +276,51 @@ def merge_gaps_json(output_dir, input_dir):
 		for key, value in gap.items():
 			data[key] = value
 			total += value
-	path = os.path.join(output_dir, "gaps.json")
+	path = os.path.join(output_dir, merged_gaps_filename)
 	with open(path, "w") as f:
-		json.dump(data, f, indent="\t", ensure_ascii=False)
-	path = os.path.join(output_dir, "total_gaps.txt")
+		json.dump(data, f, indent="\t", ensure_ascii=False, sort_keys=True)
+	path = os.path.join(output_dir, total_gaps_filename)
 	with open(path, "w") as f:
 		f.write(str(total))
 
 
 if __name__ == "__main__":
+	crop_suffix_length = config.CROP_SUFFIX_LENGTH
+	dirs = config.DIRS
+	height_range = config.HEIGHT_RANGE
+	margin = config.MARGIN
+	max_distance = config.MAX_DISTANCE
+	merged_gaps_filename = config.MERGED_GAPS_FILENAME
+	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
+	total_gaps_filename = config.TOTAL_GAPS_FILENAME
+	workers_config = config.WORKERS
 	images = sorted(
-		[f for f in os.listdir(DIRS["image_resized"]) if f.lower().endswith(".jpg")]
+		[
+			f
+			for f in os.listdir(dirs["image_resized"])
+			if f.lower().endswith(output_image_extension)
+		]
 	)
-	workers = min(WORKERS, cpu_count())
-	batches = split_batches(workers, images)
+	workers = min(workers_config, cpu_count())
+	batches = split_batches(images, workers)
 	with Pool(processes=workers) as pool:
 		args = [
 			(
 				batch,
-				HEIGHT_RANGE,
-				DIRS["image_resized"],
-				MARGIN,
-				MAX_DISTANCE,
-				DIRS["image_boxed"],
-				DIRS["image_crops"],
-				DIRS["image_gaps"],
-				DIRS["image_grouped"],
+				crop_suffix_length,
+				height_range,
+				dirs["image_resized"],
+				margin,
+				max_distance,
+				dirs["image_boxed"],
+				dirs["image_crops"],
+				dirs["image_gaps"],
+				dirs["image_grouped"],
+				output_image_extension,
 			)
 			for batch in batches
 		]
 		pool.starmap_async(batch_detect_images, args).get()
-	merge_gaps_json(DIRS["merge"], DIRS["image_gaps"])
+	merge_gaps_json(
+		dirs["image_gaps"], merged_gaps_filename, dirs["merge"], total_gaps_filename
+	)

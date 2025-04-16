@@ -1,4 +1,4 @@
-from config import ARCHIVE_EXTENSIONS, DIRS, IMAGE_EXTENSIONS, SOURCE_PATHS
+import config
 import os
 import regex
 import shutil
@@ -13,44 +13,50 @@ def natural_sort(text):
 	]
 
 
-def extract_archive(output_dir, prefix, zip_path):
+def extract_archive(output_dir, prefix, prefix_length, zip_path):
 	if not zipfile.is_zipfile(zip_path):
 		return
 	with zipfile.ZipFile(zip_path) as z:
 		for info in z.infolist():
 			basename = os.path.basename(info.filename)
-			filename = f"{prefix:04d}_{basename}"
+			filename = f"{prefix:0{prefix_length}d}_{basename}"
 			output_path = os.path.join(output_dir, filename)
 			data = z.read(info.filename)
 			with open(output_path, "wb") as f:
 				f.write(data)
 
 
-def move_images(input_dir, output_dir, prefix):
+def move_images(image_extensions, input_dir, output_dir, prefix, prefix_length):
 	images = [
 		f
 		for f in os.listdir(input_dir)
 		if os.path.isfile(os.path.join(input_dir, f))
-		and os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
+		and os.path.splitext(f)[1].lower() in image_extensions
 		and not f.startswith(".")
 	]
 	for image in sorted(images, key=natural_sort):
-		filename = f"{prefix:04d}_{image}"
+		filename = f"{prefix:0{prefix_length}d}_{image}"
 		output_path = os.path.join(output_dir, filename)
 		shutil.copy(os.path.join(input_dir, image), output_path)
 
 
 if __name__ == "__main__":
-	source_path = SOURCE_PATHS[1]
+	archive_extensions = config.ARCHIVE_EXTENSIONS
+	dirs = config.DIRS
+	image_extensions = config.IMAGE_EXTENSIONS
+	output_filename_length = config.OUTPUT_FILENAME_LENGTH
+	prefix_length = config.PREFIX_LENGTH
+	source_paths = config.SOURCE_PATHS
+	source_path = source_paths[1]
 	if len(sys.argv) > 1:
 		source_path = sys.argv[1]
-	output_dir = DIRS["image"]
-	temp_dir = DIRS["temp"]
+	output_dir = dirs["image"]
+	temp_dir = dirs["temp"]
 	if (
 		os.path.isfile(source_path)
-		and os.path.splitext(source_path)[1].lower() in ARCHIVE_EXTENSIONS
+		and os.path.splitext(source_path)[1].lower() in archive_extensions
 	):
-		extract_archive(temp_dir, 0, source_path)
+		extract_archive(temp_dir, 0, prefix_length, source_path)
 	elif os.path.isdir(source_path):
 		paths = os.listdir(source_path)
 		archives = sorted(
@@ -58,7 +64,7 @@ if __name__ == "__main__":
 				f
 				for f in paths
 				if os.path.isfile(os.path.join(source_path, f))
-				and os.path.splitext(f)[1].lower() in ARCHIVE_EXTENSIONS
+				and os.path.splitext(f)[1].lower() in archive_extensions
 			],
 			key=natural_sort,
 		)
@@ -71,26 +77,28 @@ if __name__ == "__main__":
 				f
 				for f in paths
 				if os.path.isfile(os.path.join(source_path, f))
-				and os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
+				and os.path.splitext(f)[1].lower() in image_extensions
 				and not f.startswith(".")
 			],
 			key=natural_sort,
 		)
 		if archives:
 			for i, archive in enumerate(archives):
-				extract_archive(temp_dir, i, os.path.join(source_path, archive))
+				extract_archive(
+					temp_dir, i, prefix_length, os.path.join(source_path, archive)
+				)
 		elif sub_dirs:
 			for i, sub_dir in enumerate(sub_dirs):
 				sub_dir_path = os.path.join(source_path, sub_dir)
-				move_images(sub_dir_path, temp_dir, i)
+				move_images(image_extensions, sub_dir_path, temp_dir, i, prefix_length)
 		elif images:
-			move_images(source_path, temp_dir, 0)
+			move_images(image_extensions, source_path, temp_dir, 0, prefix_length)
 	temp_images = []
 	for f in os.listdir(temp_dir):
 		temp_path = os.path.join(temp_dir, f)
 		if (
 			os.path.isfile(temp_path)
-			and os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
+			and os.path.splitext(f)[1].lower() in image_extensions
 		):
 			temp_images.append(f)
 	temp_images = sorted(temp_images, key=natural_sort)
@@ -98,7 +106,7 @@ if __name__ == "__main__":
 	for temp_image in temp_images:
 		temp_image_path = os.path.join(temp_dir, temp_image)
 		extension = os.path.splitext(temp_image)[1].lower()
-		output_filename = f"{image_counter:04d}{extension}"
+		output_filename = f"{image_counter:0{output_filename_length}d}{extension}"
 		output_path = os.path.join(output_dir, output_filename)
 		if os.path.exists(output_path):
 			continue

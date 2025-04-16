@@ -1,13 +1,4 @@
-from config import (
-	AUDIO,
-	AUDIO_LIST,
-	DELAY_DURATION,
-	DIRS,
-	SAMPLE_RATE,
-	TARGET_DURATION,
-	TRANSITION_DURATION,
-	WORKERS,
-)
+import config
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import json
@@ -71,7 +62,8 @@ def get_audio_duration(input_path):
 		"csv=p=0",
 	]
 	try:
-		return float(subprocess.check_output(cmd).decode().strip())
+		result = subprocess.check_output(cmd).decode().strip()
+		return float(result) if result else 0.0
 	except:
 		return 0.0
 
@@ -79,7 +71,9 @@ def get_audio_duration(input_path):
 def save_duration_json(basename, duration, output_dir):
 	output_path = os.path.join(output_dir, f"{basename}.json")
 	with open(output_path, "w") as f:
-		json.dump({basename: duration}, f, indent="\t", ensure_ascii=False)
+		json.dump(
+			{basename: duration}, f, indent="\t", ensure_ascii=False, sort_keys=True
+		)
 
 
 def copy_audio(input_path, output_path, sample_rate):
@@ -103,11 +97,17 @@ def copy_audio(input_path, output_path, sample_rate):
 
 
 def set_audio_duration(
-	filename, input_dir, resized_dir, output_dir, sample_rate, target_duration
+	audio_output_extension,
+	filename,
+	input_dir,
+	output_dir,
+	resized_dir,
+	sample_rate,
+	target_duration,
 ):
 	input_path = os.path.join(input_dir, filename)
 	basename = os.path.splitext(filename)[0]
-	resized_path = os.path.join(resized_dir, filename)
+	resized_path = os.path.join(resized_dir, f"{basename}{audio_output_extension}")
 	duration = get_audio_duration(input_path)
 	if 0 < duration < target_duration:
 		extend_silence(
@@ -123,79 +123,109 @@ def set_audio_duration(
 
 
 def batch_set_audio_duration(
-	batch, input_dir, resized_dir, output_dir, sample_rate, target_duration
+	audio_output_extension,
+	batch,
+	input_dir,
+	output_dir,
+	resized_dir,
+	sample_rate,
+	target_duration,
 ):
 	for filename in batch:
 		set_audio_duration(
-			filename, input_dir, resized_dir, output_dir, sample_rate, target_duration
+			audio_output_extension,
+			filename,
+			input_dir,
+			output_dir,
+			resized_dir,
+			sample_rate,
+			target_duration,
 		)
 
 
 def create_transition_files(
-	audios, resized_dir, duration_dir, transition_duration, sample_rate
+	audio_output_extension,
+	audios,
+	duration_dir,
+	prefix_length,
+	resized_dir,
+	sample_rate,
+	transition_duration,
+	transition_suffix,
 ):
 	if transition_duration == 0:
 		return
 	previous_prefix = None
 	for i, filename in enumerate(audios):
-		current_prefix = filename[:4]
+		current_prefix = filename[:prefix_length]
 		if i > 0 and current_prefix != previous_prefix:
-			basename = f"{previous_prefix}999"
-			filename = f"{basename}.wav"
-			transition_path = os.path.join(resized_dir, filename)
+			basename = f"{previous_prefix}{transition_suffix}"
+			output_filename = f"{basename}{audio_output_extension}"
+			transition_path = os.path.join(resized_dir, output_filename)
 			create_silence(transition_duration, transition_path, sample_rate)
 			save_duration_json(basename, transition_duration, duration_dir)
 		previous_prefix = current_prefix
 
 
-def create_delay(audios, resized_dir, duration_dir, delay_duration, sample_rate):
-	if delay_duration == 0:
+def create_delay(
+	audio_output_extension,
+	audios,
+	delay_duration,
+	delay_suffix,
+	duration_dir,
+	prefix_length,
+	resized_dir,
+	sample_rate,
+):
+	if delay_duration == 0 or not audios:
 		return
 	filename = audios[0]
-	basename = f"{filename[:4]}000"
-	filename = f"{basename}.wav"
-	transition_path = os.path.join(resized_dir, filename)
-	create_silence(delay_duration, transition_path, sample_rate)
+	basename = f"{filename[:prefix_length]}{delay_suffix}"
+	output_filename = f"{basename}{audio_output_extension}"
+	delay_path = os.path.join(resized_dir, output_filename)
+	create_silence(delay_duration, delay_path, sample_rate)
 	save_duration_json(basename, delay_duration, duration_dir)
 
 
-def merge_duration_json(output_dir, input_dir):
+def merge_duration_json(input_dir, merged_durations_filename, output_dir):
 	durations = {}
 	files = [f for f in os.listdir(input_dir) if f.endswith(".json")]
 	for filename in files:
 		path = os.path.join(input_dir, filename)
 		with open(path) as f:
 			duration = json.load(f)
-		for key, value in duration.items():
-			durations[key] = value
-	path = os.path.join(output_dir, "durations.json")
+			durations.update(duration)
+	path = os.path.join(output_dir, merged_durations_filename)
 	with open(path, "w") as f:
-		json.dump(durations, f, indent="\t", ensure_ascii=False)
+		json.dump(durations, f, indent="\t", ensure_ascii=False, sort_keys=True)
 
 
-def calculate_total_duration(input_dir):
-	path = os.path.join(input_dir, "durations.json")
+def calculate_total_duration(
+	input_dir, merged_durations_filename, total_duration_filename
+):
+	path = os.path.join(input_dir, merged_durations_filename)
+	total = 0.0
 	with open(path) as f:
 		durations = json.load(f)
-	total = 0
-	for i in durations.values():
-		total += i
-	path = os.path.join(input_dir, "total_duration.txt")
-	with open(path, "w") as f:
+		total = sum(durations.values())
+	output_path = os.path.join(input_dir, total_duration_filename)
+	with open(output_path, "w") as f:
 		f.write(str(total))
 
 
-def create_audio_list(audio_list, audios, input_dir, output_dir):
-	output_path = os.path.join(output_dir, audio_list)
+def create_audio_list(audio_list_filename, audios, input_dir, output_dir):
+	output_path = os.path.join(output_dir, audio_list_filename)
 	with open(output_path, "w") as f:
 		for filename in audios:
 			path = os.path.join(input_dir, filename)
 			f.write(f"file '{os.path.abspath(path)}'\n")
 
 
-def render_audio(audio, audio_list, input_dir, render_dir, sample_rate):
-	path_input = os.path.join(input_dir, audio_list)
-	path_render = os.path.join(render_dir, audio)
+def render_audio(
+	audio_filename, audio_list_filename, input_dir, render_dir, sample_rate
+):
+	path_input = os.path.join(input_dir, audio_list_filename)
+	path_render = os.path.join(render_dir, audio_filename)
 	cmd = [
 		"ffmpeg",
 		"-y",
@@ -224,69 +254,101 @@ def render_audio(audio, audio_list, input_dir, render_dir, sample_rate):
 
 
 if __name__ == "__main__":
-	audios = sorted(
+	audio_concat_list_filename = config.AUDIO_CONCAT_LIST_FILENAME
+	audio_delay_duration = config.AUDIO_DELAY_DURATION
+	audio_filename = config.AUDIO
+	audio_output_extension = config.AUDIO_OUTPUT_EXTENSION
+	audio_target_segment_duration = config.AUDIO_TARGET_SEGMENT_DURATION
+	audio_transition_duration = config.AUDIO_TRANSITION_DURATION
+	delay_suffix = config.DELAY_SUFFIX
+	dirs = config.DIRS
+	merged_durations_filename = config.MERGED_DURATIONS_FILENAME
+	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
+	prefix_length = config.PREFIX_LENGTH
+	sample_rate = config.SAMPLE_RATE
+	total_duration_filename = config.TOTAL_DURATION_FILENAME
+	transition_suffix = config.TRANSITION_SUFFIX
+	workers_config = config.WORKERS
+	initial_audios = sorted(
 		[
-			f.replace(".jpg", ".wav")
-			for f in os.listdir(DIRS["image_crops"])
-			if f.lower().endswith(".jpg")
+			f.replace(output_image_extension, audio_output_extension)
+			for f in os.listdir(dirs["image_crops"])
+			if f.lower().endswith(output_image_extension)
 		]
 	)
-	workers = min(WORKERS, cpu_count())
-	batches = split_batches(workers, audios)
+	workers = min(workers_config, cpu_count())
+	batches = split_batches(initial_audios, workers)
 	with Pool(processes=workers) as pool:
 		args = [
 			(
+				audio_output_extension,
 				batch,
-				DIRS["image_audio"],
-				DIRS["image_audio_resized"],
-				DIRS["image_durations"],
-				SAMPLE_RATE,
-				TARGET_DURATION,
+				dirs["image_audio"],
+				dirs["image_durations"],
+				dirs["image_audio_resized"],
+				sample_rate,
+				audio_target_segment_duration,
 			)
 			for batch in batches
 		]
 		pool.starmap_async(batch_set_audio_duration, args).get()
-	audios = sorted(
+	processed_audios = sorted(
 		[
 			f
-			for f in os.listdir(DIRS["image_audio_resized"])
-			if f.lower().endswith(".wav")
+			for f in os.listdir(dirs["image_audio_resized"])
+			if f.lower().endswith(audio_output_extension)
 		]
 	)
 	create_transition_files(
-		audios,
-		DIRS["image_audio_resized"],
-		DIRS["image_durations"],
-		TRANSITION_DURATION,
-		SAMPLE_RATE,
+		audio_output_extension,
+		processed_audios,
+		dirs["image_durations"],
+		prefix_length,
+		dirs["image_audio_resized"],
+		sample_rate,
+		audio_transition_duration,
+		transition_suffix,
 	)
-	audios = sorted(
+	audios_with_transitions = sorted(
 		[
 			f
-			for f in os.listdir(DIRS["image_audio_resized"])
-			if f.lower().endswith(".wav")
+			for f in os.listdir(dirs["image_audio_resized"])
+			if f.lower().endswith(audio_output_extension)
 		]
 	)
 	create_delay(
-		audios,
-		DIRS["image_audio_resized"],
-		DIRS["image_durations"],
-		DELAY_DURATION,
-		SAMPLE_RATE,
+		audio_output_extension,
+		audios_with_transitions,
+		audio_delay_duration,
+		delay_suffix,
+		dirs["image_durations"],
+		prefix_length,
+		dirs["image_audio_resized"],
+		sample_rate,
 	)
-	merge_duration_json(DIRS["merge"], DIRS["image_durations"])
-	calculate_total_duration(DIRS["merge"])
-	audios = sorted(
+	merge_duration_json(
+		dirs["image_durations"], merged_durations_filename, dirs["merge"]
+	)
+	calculate_total_duration(
+		dirs["merge"], merged_durations_filename, total_duration_filename
+	)
+	final_audios = sorted(
 		[
 			f
-			for f in os.listdir(DIRS["image_audio_resized"])
-			if f.lower().endswith(".wav")
+			for f in os.listdir(dirs["image_audio_resized"])
+			if f.lower().endswith(audio_output_extension)
 		]
 	)
 	create_audio_list(
-		AUDIO_LIST,
-		audios,
-		DIRS["image_audio_resized"],
-		DIRS["merge"],
+		audio_concat_list_filename,
+		final_audios,
+		dirs["image_audio_resized"],
+		dirs["merge"],
 	)
-	render_audio(AUDIO, AUDIO_LIST, DIRS["merge"], DIRS["render"], SAMPLE_RATE)
+	render_audio(
+		audio_filename,
+		audio_concat_list_filename,
+		dirs["merge"],
+		dirs["render"],
+		sample_rate,
+	)

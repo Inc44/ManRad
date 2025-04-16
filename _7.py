@@ -1,15 +1,4 @@
-from config import (
-	API_ENDPOINTS,
-	AUDIO_MIN_SIZE,
-	DIRS,
-	FISH_TEMPERATURE,
-	MAX_TOKENS,
-	PAUSE,
-	REFERENCE_AUDIO,
-	REFERENCE_TEXT,
-	RETRIES,
-	WORKERS,
-)
+import config
 from _2 import split_batches
 from multiprocessing import Pool, cpu_count
 import base64
@@ -43,6 +32,7 @@ def is_valid_audio(min_size, path):
 def text_to_audio(
 	api_endpoint,
 	attempt,
+	audio_output_extension,
 	filename,
 	input_dir,
 	max_tokens,
@@ -56,7 +46,7 @@ def text_to_audio(
 ):
 	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
-	audio_filename = f"{basename}.wav"
+	audio_filename = f"{basename}{audio_output_extension}"
 	audio_path = os.path.join(output_dir, audio_filename)
 	if is_valid_audio(min_size, audio_path):
 		return
@@ -84,7 +74,7 @@ def text_to_audio(
 		"text": text,
 		"use_memory_cache": "on",
 	}
-	for attempt in range(attempt, retries):
+	for current_attempt in range(attempt, retries):
 		try:
 			response = requests.post(api_endpoint, headers=headers, json=payload)
 			if response.status_code == 200:
@@ -94,14 +84,15 @@ def text_to_audio(
 					return
 		except:
 			pass
-		if attempt < retries - 1:
-			sleep_time = pause * (2**attempt)
+		if current_attempt < retries - 1:
+			sleep_time = pause * (2**current_attempt)
 			time.sleep(sleep_time)
 
 
 def batch_text_to_audio(
 	api_endpoint,
 	attempt,
+	audio_output_extension,
 	batch,
 	input_dir,
 	max_tokens,
@@ -117,6 +108,7 @@ def batch_text_to_audio(
 		text_to_audio(
 			api_endpoint,
 			attempt,
+			audio_output_extension,
 			filename,
 			input_dir,
 			max_tokens,
@@ -131,26 +123,38 @@ def batch_text_to_audio(
 
 
 if __name__ == "__main__":
+	api_endpoints = config.API_ENDPOINTS
+	audio_min_size = config.AUDIO_MIN_SIZE
+	audio_output_extension = config.AUDIO_OUTPUT_EXTENSION
+	dirs = config.DIRS
+	fish_temperature = config.FISH_TEMPERATURE
+	max_tokens = config.MAX_TOKENS
+	pause = config.PAUSE
+	reference_audio = config.REFERENCE_AUDIO
+	reference_text = config.REFERENCE_TEXT
+	retries = config.RETRIES
+	workers_config = config.WORKERS
 	texts = sorted(
-		[f for f in os.listdir(DIRS["image_text"]) if f.lower().endswith(".json")]
+		[f for f in os.listdir(dirs["image_text"]) if f.lower().endswith(".json")]
 	)
-	workers = min(WORKERS, cpu_count())
-	batches = split_batches(workers, texts)
+	workers = min(workers_config, cpu_count())
+	batches = split_batches(texts, workers)
 	with Pool(processes=workers) as pool:
 		args = [
 			(
-				API_ENDPOINTS[0],
+				api_endpoints[0],
 				0,
+				audio_output_extension,
 				batch,
-				DIRS["image_text"],
-				MAX_TOKENS,
-				AUDIO_MIN_SIZE,
-				DIRS["image_audio"],
-				PAUSE,
-				REFERENCE_AUDIO,
-				REFERENCE_TEXT,
-				RETRIES,
-				FISH_TEMPERATURE,
+				dirs["image_text"],
+				max_tokens,
+				audio_min_size,
+				dirs["image_audio"],
+				pause,
+				reference_audio,
+				reference_text,
+				retries,
+				fish_temperature,
 			)
 			for batch in batches
 		]
