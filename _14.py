@@ -1,14 +1,4 @@
-from config import (
-	AUDIO,
-	DELAY_DURATION,
-	DELAY_PERCENT,
-	DIRS,
-	MEDIA,
-	SCROLL_VIDEO,
-	TARGET_FPS,
-	TARGET_HEIGHT,
-	TARGET_WIDTH,
-)
+import config
 from _12 import render_media
 import bisect
 import cv2
@@ -98,12 +88,12 @@ def cached_image(path):
 
 
 def compose_scroll_frame(
+	frames_metadata,
+	height,
+	total_content_height,
+	vertical_start_position_list,
 	viewport_top_position,
 	width,
-	height,
-	frames_metadata,
-	vertical_start_position_list,
-	total_content_height,
 ):
 	max_scroll_pos = max(0, total_content_height - height)
 	safe_viewport_top_position = (
@@ -165,16 +155,17 @@ def compose_scroll_frame(
 
 
 def process_scroll_segment(
-	frames_metadata,
-	vertical_start_position_list,
-	total_content_height,
-	width,
-	height,
-	start_focus_point,
-	vertical_gap_list,
+	delay_percent,
 	duration,
-	scroll_video_render_pipe,
+	frames_metadata,
 	frames_per_second,
+	height,
+	scroll_video_render_pipe,
+	start_focus_point,
+	total_content_height,
+	vertical_gap_list,
+	vertical_start_position_list,
+	width,
 ):
 	num_frames_in_segment = round(duration * frames_per_second)
 	if num_frames_in_segment <= 0:
@@ -186,17 +177,17 @@ def process_scroll_segment(
 	is_hold_segment = (
 		not vertical_gap_list or sum(abs(gap) for gap in vertical_gap_list) < 1e-6
 	)
-	vertical_offset = height * DELAY_PERCENT
+	vertical_offset = height * delay_percent
 	final_focus_point = start_focus_point
 	if is_hold_segment:
 		viewport_top_pos = start_focus_point - vertical_offset
 		hold_frame = compose_scroll_frame(
+			frames_metadata,
+			height,
+			total_content_height,
+			vertical_start_position_list,
 			int(round(viewport_top_pos)),
 			width,
-			height,
-			frames_metadata,
-			vertical_start_position_list,
-			total_content_height,
 		)
 		hold_frame_bytes = hold_frame.tobytes()
 		for _ in range(num_frames_in_segment):
@@ -240,12 +231,12 @@ def process_scroll_segment(
 			)
 			viewport_top_pos = current_focus_point_pos - vertical_offset
 			output_frame = compose_scroll_frame(
+				frames_metadata,
+				height,
+				total_content_height,
+				vertical_start_position_list,
 				int(round(viewport_top_pos)),
 				width,
-				height,
-				frames_metadata,
-				vertical_start_position_list,
-				total_content_height,
 			)
 			frame_bytes = output_frame.tobytes()
 			scroll_video_render_pipe.stdin.write(frame_bytes)
@@ -253,16 +244,23 @@ def process_scroll_segment(
 
 
 if __name__ == "__main__":
-	source_image_directory = DIRS["image_resized_fit"]
-	render_dir = DIRS["render"]
-	output_video_filename = "scroll_video.mkv"
-	intro_hold_duration_seconds = DELAY_DURATION
-	output_video_height_pixels = TARGET_HEIGHT
-	frames_per_second = TARGET_FPS
-	output_video_width_pixels = TARGET_WIDTH
-	output_video_path = os.path.join(render_dir, output_video_filename)
-	vertical_change_data_path = os.path.join(DIRS["merge"], "transition_gaps.json")
-	segment_duration_data_path = os.path.join(DIRS["merge"], "durations.json")
+	audio_filename = config.AUDIO
+	delay_duration = config.DELAY_DURATION
+	delay_percent = config.DELAY_PERCENT
+	dirs = config.DIRS
+	media_filename = config.MEDIA
+	merged_durations_filename = config.MERGED_DURATIONS_FILENAME
+	scroll_video_filename = config.SCROLL_VIDEO
+	target_fps = config.TARGET_FPS
+	target_height = config.TARGET_HEIGHT
+	target_width = config.TARGET_WIDTH
+	transition_gaps_filename = config.TRANSITION_GAPS_FILENAME
+	source_image_directory = dirs["image_resized_fit"]
+	render_dir = dirs["render"]
+	merge_dir = dirs["merge"]
+	output_video_path = os.path.join(render_dir, scroll_video_filename)
+	vertical_change_data_path = os.path.join(merge_dir, transition_gaps_filename)
+	segment_duration_data_path = os.path.join(merge_dir, merged_durations_filename)
 	image_metadata, total_content_height = frames_list(source_image_directory)
 	vertical_start_positions = [
 		meta["vertical_start_position"] for meta in image_metadata
@@ -276,26 +274,27 @@ if __name__ == "__main__":
 	valid_segment_keys = sorted(list(gap_keys.intersection(duration_keys)), key=int)
 	cached_image.cache_clear()
 	encoder_process = render_scroll_video(
-		output_video_height_pixels,
+		target_height,
 		output_video_path,
-		frames_per_second,
-		output_video_width_pixels,
+		target_fps,
+		target_width,
 	)
 	total_frames_written_count = 0
 	current_focus_point = 0.0
-	num_intro_frames = round(intro_hold_duration_seconds * frames_per_second)
+	num_intro_frames = round(delay_duration * target_fps)
 	if num_intro_frames > 0:
 		_ = process_scroll_segment(
-			image_metadata,
-			vertical_start_positions,
-			total_content_height,
-			output_video_width_pixels,
-			output_video_height_pixels,
-			start_focus_point=current_focus_point,
-			vertical_gap_list=[],
-			duration=intro_hold_duration_seconds,
+			delay_percent=delay_percent,
+			duration=delay_duration,
+			frames_metadata=image_metadata,
+			frames_per_second=target_fps,
+			height=target_height,
 			scroll_video_render_pipe=encoder_process,
-			frames_per_second=frames_per_second,
+			start_focus_point=current_focus_point,
+			total_content_height=total_content_height,
+			vertical_gap_list=[],
+			vertical_start_position_list=vertical_start_positions,
+			width=target_width,
 		)
 		total_frames_written_count += num_intro_frames
 	for i, segment_key in enumerate(valid_segment_keys):
@@ -312,25 +311,26 @@ if __name__ == "__main__":
 		if segment_duration <= 0:
 			current_focus_point += sum(segment_vertical_changes)
 			continue
-		num_segment_frames = round(segment_duration * frames_per_second)
+		num_segment_frames = round(segment_duration * target_fps)
 		if num_segment_frames <= 0:
 			current_focus_point += sum(segment_vertical_changes)
 			continue
 		end_focus_point = process_scroll_segment(
-			image_metadata,
-			vertical_start_positions,
-			total_content_height,
-			output_video_width_pixels,
-			output_video_height_pixels,
-			current_focus_point,
-			segment_vertical_changes,
-			segment_duration,
-			encoder_process,
-			frames_per_second,
+			delay_percent=delay_percent,
+			duration=segment_duration,
+			frames_metadata=image_metadata,
+			frames_per_second=target_fps,
+			height=target_height,
+			scroll_video_render_pipe=encoder_process,
+			start_focus_point=current_focus_point,
+			total_content_height=total_content_height,
+			vertical_gap_list=segment_vertical_changes,
+			vertical_start_position_list=vertical_start_positions,
+			width=target_width,
 		)
 		current_focus_point = end_focus_point
 		total_frames_written_count += num_segment_frames
 	if encoder_process.stdin:
 		encoder_process.stdin.close()
 	encoder_exit_code = encoder_process.wait()
-	render_media(AUDIO, MEDIA, render_dir, SCROLL_VIDEO)
+	render_media(audio_filename, media_filename, render_dir, scroll_video_filename)

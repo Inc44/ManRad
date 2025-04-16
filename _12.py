@@ -1,4 +1,4 @@
-from config import AUDIO, DELAY_DURATION, DIRS, FADE_VIDEO, MEDIA, TARGET_FPS
+import config
 import cv2
 import json
 import os
@@ -20,9 +20,11 @@ def fade_images(input_path1, input_path2, output_dir, target_fps, transition_dur
 		)
 
 
-def render_fade_video(input_dir, output_dir):
-	input_path = os.path.join(input_dir, "fade_video_list.txt")
-	output_path = os.path.join(output_dir, "fade_video.mkv")
+def render_fade_video(
+	fade_video_filename, fade_video_list_filename, input_dir, output_dir
+):
+	input_path = os.path.join(input_dir, fade_video_list_filename)
+	output_path = os.path.join(output_dir, fade_video_filename)
 	cmd = [
 		"ffmpeg",
 		"-y",
@@ -46,10 +48,10 @@ def render_fade_video(input_dir, output_dir):
 	subprocess.run(cmd)
 
 
-def render_media(audio, media, render_dir, video):
-	video_path = os.path.join(render_dir, video)
-	audio_path = os.path.join(render_dir, audio)
-	render_path = os.path.join(render_dir, media)
+def render_media(audio_filename, media_filename, render_dir, video_filename):
+	video_path = os.path.join(render_dir, video_filename)
+	audio_path = os.path.join(render_dir, audio_filename)
+	render_path = os.path.join(render_dir, media_filename)
 	cmd = [
 		"ffmpeg",
 		"-y",
@@ -68,31 +70,43 @@ def render_media(audio, media, render_dir, video):
 
 
 if __name__ == "__main__":
-	input_dir = DIRS["image_resized_fit"]
-	output_dir = DIRS["image_resized_fit_fade"]
-	merge_dir = DIRS["merge"]
-	render_dir = DIRS["render"]
-	target_fps = TARGET_FPS
-	path = os.path.join(merge_dir, "page_durations.json")
+	audio_filename = config.AUDIO
+	delay_duration = config.DELAY_DURATION
+	delay_suffix = config.DELAY_SUFFIX
+	dirs = config.DIRS
+	fade_video_filename = config.FADE_VIDEO
+	fade_video_list_filename = config.FADE_VIDEO_LIST_FILENAME
+	frame_suffix_length = config.FRAME_SUFFIX_LENGTH
+	media_filename = config.MEDIA
+	page_durations_filename = config.PAGE_DURATIONS_FILENAME
+	prefix_length = config.PREFIX_LENGTH
+	sum_suffix = config.SUM_SUFFIX
+	target_fps = config.TARGET_FPS
+	transition_suffix = config.TRANSITION_SUFFIX
+	input_dir = dirs["image_resized_fit"]
+	output_dir = dirs["image_resized_fit_fade"]
+	merge_dir = dirs["merge"]
+	render_dir = dirs["render"]
+	path = os.path.join(merge_dir, page_durations_filename)
 	with open(path) as f:
 		page_durations = json.load(f)
-	path = os.path.join(merge_dir, "fade_video_list.txt")
+	path = os.path.join(merge_dir, fade_video_list_filename)
 	keys = sorted(page_durations.keys())
 	with open(path, "w") as f:
 		for i, key in enumerate(keys):
 			duration = page_durations[key]
-			prefix = key[:4]
-			suffix = key[4:]
+			prefix = key[:prefix_length]
+			suffix = key[prefix_length:]
 			input_path1 = os.path.join(input_dir, f"{prefix}.jpg")
-			if suffix in ["000", "001"]:
+			if suffix == delay_suffix or suffix == sum_suffix:
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {1 / target_fps}\n")
 				f.write(f"file '{os.path.abspath(input_path1)}'\n")
 				f.write(f"duration {duration - 1 / target_fps}\n")
-			elif suffix == "999":
+			elif suffix == transition_suffix:
 				if i + 1 < len(keys):
 					next_key = keys[i + 1]
-					next_prefix = next_key[:4]
+					next_prefix = next_key[:prefix_length]
 					input_path2 = os.path.join(input_dir, f"{next_prefix}.jpg")
 					fade_images(
 						input_path1,
@@ -102,15 +116,20 @@ if __name__ == "__main__":
 						duration,
 					)
 					frames = int(target_fps * duration)
-					for i in range(frames):
-						path = os.path.join(output_dir, f"{prefix}{i:03d}.jpg")
-						f.write(f"file '{os.path.abspath(path)}'\n")
+					for j in range(frames):
+						path_frame = os.path.join(
+							output_dir, f"{prefix}{j:0{frame_suffix_length}d}.jpg"
+						)
+						f.write(f"file '{os.path.abspath(path_frame)}'\n")
 						f.write(f"duration {duration / frames}\n")
-		f.write(f"file '{os.path.abspath(path)}'\n")
+		last_frame_path = path_frame if "path_frame" in locals() else input_path1
+		f.write(f"file '{os.path.abspath(last_frame_path)}'\n")
 		f.write(f"duration {1 / target_fps}\n")
-		f.write(f"file '{os.path.abspath(path)}'\n")
-		f.write(f"duration {DELAY_DURATION - 1 / target_fps}\n")
-		f.write(f"file '{os.path.abspath(path)}'\n")
+		f.write(f"file '{os.path.abspath(last_frame_path)}'\n")
+		f.write(f"duration {delay_duration - 1 / target_fps}\n")
+		f.write(f"file '{os.path.abspath(last_frame_path)}'\n")
 		f.write(f"duration {1 / target_fps}\n")
-	render_fade_video(merge_dir, render_dir)
-	render_media(AUDIO, MEDIA, render_dir, FADE_VIDEO)
+	render_fade_video(
+		fade_video_filename, fade_video_list_filename, merge_dir, render_dir
+	)
+	render_media(audio_filename, media_filename, render_dir, fade_video_filename)
