@@ -799,6 +799,7 @@ def costs(
 	cost_gemini,
 	cost_groq,
 	cost_openai,
+	cost_openrouter,
 	cost_tts,
 	dirs,
 	encoding_name,
@@ -820,6 +821,7 @@ def costs(
 	token_count_gemini = 48 * count
 	token_count_groq = 48 * count
 	token_count_openai = 48 * count
+	token_count_openrouter = 48 * count
 	for image in images:
 		image_path = os.path.join(dirs["image_crops"], image)
 		token_count_deepinfra += 160
@@ -830,6 +832,7 @@ def costs(
 		token_count_openai += calculate_openai_tokens(
 			False, output_image_extension, image_path
 		)
+		token_count_openrouter += 256
 	extracted_text = ""
 	for text_file in texts:
 		text_path = os.path.join(dirs["image_text"], text_file)
@@ -889,6 +892,24 @@ def costs(
 				(
 					cost_openai[0] * token_count_openai
 					+ cost_openai[1] * output_token_count
+				)
+				/ 1000000,
+				4,
+			),
+		},
+		"openrouter": {
+			"input_tokens": token_count_openrouter,
+			"output_tokens": output_token_count,
+			"input_cost": round(
+				(cost_openrouter[0] * token_count_openrouter) / 1000000, 4
+			),
+			"output_cost": round(
+				(cost_openrouter[1] * output_token_count) / 1000000, 4
+			),
+			"total_cost": round(
+				(
+					cost_openrouter[0] * token_count_openrouter
+					+ cost_openrouter[1] * output_token_count
 				)
 				/ 1000000,
 				4,

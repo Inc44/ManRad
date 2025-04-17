@@ -73,6 +73,7 @@ API_ENDPOINTS = [
 	"https://api.deepinfra.com/v1/openai/chat/completions",  # DeepInfra
 	"https://api.lemonfox.ai/v1/audio/speech",  # Lemon
 	"https://api.openai.com/v1/audio/speech",  # OpenAI
+	"https://openrouter.ai/api/v1/chat/completions",  # OpenRouter
 ]
 API_KEYS = [
 	"not-needed",  # Kokoro
@@ -82,6 +83,7 @@ API_KEYS = [
 	os.environ.get("MELO_API_KEY"),  # Melo
 	os.environ.get("MISTRAL_API_KEY"),  # Mistral
 	os.environ.get("OPENAI_API_KEY"),  # OpenAI
+	os.environ.get("OPENROUTER_API_KEY"),  # OpenRouter
 ]
 INSTRUCTIONS = [
 	"",
@@ -107,6 +109,7 @@ COST_DEEPINFRA = (0.08, 0.30)
 COST_GEMINI = (0.10, 0.40)
 COST_GROQ = (0.90, 0.90)
 COST_OPENAI = (5.00, 15.00)
+COST_OPENROUTER = (0.10, 0.20)
 COST_TTS = 15.0
 WORKERS = 6
 TARGET_FPS = 60

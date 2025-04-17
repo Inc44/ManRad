@@ -99,6 +99,7 @@ def action_7():
 		config.COST_GEMINI,
 		config.COST_GROQ,
 		config.COST_OPENAI,
+		config.COST_OPENROUTER,
 		config.COST_TTS,
 		config.DIRS,
 		config.ENCODING_NAME,

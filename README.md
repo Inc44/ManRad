@@ -12,6 +12,7 @@ setx /M LEMON_API_KEY ""
 setx /M MELO_API_KEY ""
 setx /M MISTRAL_API_KEY ""
 setx /M OPENAI_API_KEY ""
+setx /M OPENROUTER_API_KEY ""
 ```
 
 Verify that your environment variables are set:
@@ -22,6 +23,7 @@ echo %LEMON_API_KEY%
 echo %MELO_API_KEY%
 echo %MISTRAL_API_KEY%
 echo %OPENAI_API_KEY%
+echo %OPENROUTER_API_KEY%
 ```
 
 Create and activate a new Conda environment, then install the required packages:
