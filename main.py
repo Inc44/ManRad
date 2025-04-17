@@ -1,5 +1,3 @@
-LAZY_PADDLEOCR = True
-LAZY_DRAW_OCR = True
 from multiprocessing import Pool, cpu_count
 import base64
 import bisect
@@ -428,11 +426,8 @@ def save_gaps_json(basename, crop_suffix_length, gaps, output_dir):
 
 
 def init_ocr_engine():
-	global LAZY_PADDLEOCR
-	if LAZY_PADDLEOCR:
-		from paddleocr import PaddleOCR
+	from paddleocr import PaddleOCR
 
-		LAZY_PADDLEOCR = False
 	return PaddleOCR(
 		gpu_id=0,
 		gpu_mem=1000,
@@ -460,11 +455,8 @@ def detect_image(
 	output_dir_group,
 	output_image_extension,
 ):
-	global LAZY_DRAW_OCR
-	if LAZY_DRAW_OCR:
-		from paddleocr import draw_ocr
+	from paddleocr import draw_ocr
 
-		LAZY_DRAW_OCR = False
 	basename = os.path.splitext(filename)[0]
 	path = os.path.join(input_dir, filename)
 	ocrs = ocr_engine.ocr(path)
