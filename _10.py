@@ -23,7 +23,7 @@ def resize_fit_image(
 		top_pad = (height - target_height) // 2
 		bottom_pad = top_pad + target_height
 		image = image[top_pad:bottom_pad, 0:width]
-	else:
+	elif height < target_height:
 		top_pad = (target_height - height) // 2
 		bottom_pad = target_height - height - top_pad
 		image = cv2.copyMakeBorder(
@@ -41,17 +41,11 @@ def batch_resize_images(
 		)
 
 
-if __name__ == "__main__":
-	dirs = config.DIRS
-	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
-	target_height = config.TARGET_HEIGHT
-	workers_config = config.WORKERS
+def resize_to_fit(dirs, output_image_extension, target_height, workers_config):
+	input_dir = dirs["image_resized"]
+	output_dir = dirs["image_resized_fit"]
 	images = sorted(
-		[
-			f
-			for f in os.listdir(dirs["image_resized"])
-			if f.lower().endswith(output_image_extension)
-		]
+		[f for f in os.listdir(input_dir) if f.lower().endswith(output_image_extension)]
 	)
 	workers = min(workers_config, cpu_count())
 	batches = split_batches(images, workers)
@@ -59,11 +53,20 @@ if __name__ == "__main__":
 		args = [
 			(
 				batch,
-				dirs["image_resized"],
-				dirs["image_resized_fit"],
+				input_dir,
+				output_dir,
 				output_image_extension,
 				target_height,
 			)
 			for batch in batches
 		]
 		pool.starmap_async(batch_resize_images, args).get()
+
+
+if __name__ == "__main__":
+	resize_to_fit(
+		config.DIRS,
+		config.OUTPUT_IMAGE_EXTENSION,
+		config.TARGET_HEIGHT,
+		config.WORKERS,
+	)

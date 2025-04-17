@@ -272,8 +272,8 @@ def merge_gaps_json(input_dir, merged_gaps_filename, output_dir, total_gaps_file
 	for filename in files:
 		path = os.path.join(input_dir, filename)
 		with open(path) as f:
-			gap = json.load(f)
-		for key, value in gap.items():
+			gap_data = json.load(f)
+		for key, value in gap_data.items():
 			data[key] = value
 			total += value
 	path = os.path.join(output_dir, merged_gaps_filename)
@@ -284,16 +284,17 @@ def merge_gaps_json(input_dir, merged_gaps_filename, output_dir, total_gaps_file
 		f.write(str(total))
 
 
-if __name__ == "__main__":
-	crop_suffix_length = config.CROP_SUFFIX_LENGTH
-	dirs = config.DIRS
-	height_range = config.HEIGHT_RANGE
-	margin = config.MARGIN
-	max_distance = config.MAX_DISTANCE
-	merged_gaps_filename = config.MERGED_GAPS_FILENAME
-	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
-	total_gaps_filename = config.TOTAL_GAPS_FILENAME
-	workers_config = config.WORKERS
+def crops(
+	crop_suffix_length,
+	dirs,
+	height_range,
+	margin,
+	max_distance,
+	merged_gaps_filename,
+	output_image_extension,
+	total_gaps_filename,
+	workers_config,
+):
 	images = sorted(
 		[
 			f
@@ -323,4 +324,18 @@ if __name__ == "__main__":
 		pool.starmap_async(batch_detect_images, args).get()
 	merge_gaps_json(
 		dirs["image_gaps"], merged_gaps_filename, dirs["merge"], total_gaps_filename
+	)
+
+
+if __name__ == "__main__":
+	crops(
+		config.CROP_SUFFIX_LENGTH,
+		config.DIRS,
+		config.HEIGHT_RANGE,
+		config.MARGIN,
+		config.MAX_DISTANCE,
+		config.MERGED_GAPS_FILENAME,
+		config.OUTPUT_IMAGE_EXTENSION,
+		config.TOTAL_GAPS_FILENAME,
+		config.WORKERS,
 	)

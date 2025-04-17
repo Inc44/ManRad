@@ -94,20 +94,21 @@ def batch_text_to_audio(
 		)
 
 
-if __name__ == "__main__":
-	api_endpoints = config.API_ENDPOINTS
-	api_keys = config.API_KEYS
-	audio_min_size = config.AUDIO_MIN_SIZE
-	audio_output_extension = config.AUDIO_OUTPUT_EXTENSION
-	dirs = config.DIRS
-	instructions = config.INSTRUCTIONS
-	max_tokens = config.MAX_TOKENS
-	models = config.MODELS
-	pause = config.PAUSE
-	response_format = config.RESPONSE_FORMAT
-	retries = config.RETRIES
-	voices = config.VOICES
-	workers_config = config.WORKERS
+def openai_tts(
+	api_endpoints,
+	api_keys,
+	audio_min_size,
+	audio_output_extension,
+	dirs,
+	instructions,
+	max_tokens,
+	models,
+	pause,
+	response_format,
+	retries,
+	voices,
+	workers_config,
+):
 	texts = sorted(
 		[f for f in os.listdir(dirs["image_text"]) if f.lower().endswith(".json")]
 	)
@@ -135,3 +136,21 @@ if __name__ == "__main__":
 			for batch in batches
 		]
 		pool.starmap_async(batch_text_to_audio, args).get()
+
+
+if __name__ == "__main__":
+	openai_tts(
+		config.API_ENDPOINTS,
+		config.API_KEYS,
+		config.AUDIO_MIN_SIZE,
+		config.AUDIO_OUTPUT_EXTENSION,
+		config.DIRS,
+		config.INSTRUCTIONS,
+		config.MAX_TOKENS,
+		config.MODELS,
+		config.PAUSE,
+		config.RESPONSE_FORMAT,
+		config.RETRIES,
+		config.VOICES,
+		config.WORKERS,
+	)

@@ -69,20 +69,21 @@ def render_media(audio_filename, media_filename, render_dir, video_filename):
 	subprocess.run(cmd)
 
 
-if __name__ == "__main__":
-	audio_filename = config.AUDIO
-	delay_duration = config.DELAY_DURATION
-	delay_suffix = config.DELAY_SUFFIX
-	dirs = config.DIRS
-	fade_video_filename = config.FADE_VIDEO
-	fade_video_list_filename = config.FADE_VIDEO_LIST_FILENAME
-	frame_suffix_length = config.FRAME_SUFFIX_LENGTH
-	media_filename = config.MEDIA
-	page_durations_filename = config.PAGE_DURATIONS_FILENAME
-	prefix_length = config.PREFIX_LENGTH
-	sum_suffix = config.SUM_SUFFIX
-	target_fps = config.TARGET_FPS
-	transition_suffix = config.TRANSITION_SUFFIX
+def fade(
+	audio_filename,
+	delay_suffix,
+	dirs,
+	fade_video_filename,
+	fade_video_list_filename,
+	frame_suffix_length,
+	hold_duration,
+	media_filename,
+	page_durations_filename,
+	prefix_length,
+	sum_suffix,
+	target_fps,
+	transition_suffix,
+):
 	input_dir = dirs["image_resized_fit"]
 	output_dir = dirs["image_resized_fit_fade"]
 	merge_dir = dirs["merge"]
@@ -90,9 +91,9 @@ if __name__ == "__main__":
 	path = os.path.join(merge_dir, page_durations_filename)
 	with open(path) as f:
 		page_durations = json.load(f)
-	path = os.path.join(merge_dir, fade_video_list_filename)
+	list_file_path = os.path.join(merge_dir, fade_video_list_filename)
 	keys = sorted(page_durations.keys())
-	with open(path, "w") as f:
+	with open(list_file_path, "w") as f:
 		for i, key in enumerate(keys):
 			duration = page_durations[key]
 			prefix = key[:prefix_length]
@@ -126,10 +127,28 @@ if __name__ == "__main__":
 		f.write(f"file '{os.path.abspath(last_frame_path)}'\n")
 		f.write(f"duration {1 / target_fps}\n")
 		f.write(f"file '{os.path.abspath(last_frame_path)}'\n")
-		f.write(f"duration {delay_duration - 1 / target_fps}\n")
+		f.write(f"duration {hold_duration - 1 / target_fps}\n")
 		f.write(f"file '{os.path.abspath(last_frame_path)}'\n")
 		f.write(f"duration {1 / target_fps}\n")
 	render_fade_video(
 		fade_video_filename, fade_video_list_filename, merge_dir, render_dir
 	)
 	render_media(audio_filename, media_filename, render_dir, fade_video_filename)
+
+
+if __name__ == "__main__":
+	fade(
+		config.AUDIO,
+		config.DELAY_SUFFIX,
+		config.DIRS,
+		config.FADE_VIDEO,
+		config.FADE_VIDEO_LIST_FILENAME,
+		config.FRAME_SUFFIX_LENGTH,
+		config.VIDEO_HOLD_DURATION,
+		config.MEDIA,
+		config.PAGE_DURATIONS_FILENAME,
+		config.PREFIX_LENGTH,
+		config.SUM_SUFFIX,
+		config.TARGET_FPS,
+		config.TRANSITION_SUFFIX,
+	)

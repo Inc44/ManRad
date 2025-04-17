@@ -40,16 +40,18 @@ def move_images(image_extensions, input_dir, output_dir, prefix, prefix_length):
 		shutil.copy(os.path.join(input_dir, image), output_path)
 
 
-if __name__ == "__main__":
-	archive_extensions = config.ARCHIVE_EXTENSIONS
-	dirs = config.DIRS
-	image_extensions = config.IMAGE_EXTENSIONS
-	output_filename_length = config.OUTPUT_FILENAME_LENGTH
-	prefix_length = config.PREFIX_LENGTH
-	source_paths = config.SOURCE_PATHS
+def prepare(
+	archive_extensions,
+	argv,
+	dirs,
+	image_extensions,
+	output_filename_length,
+	prefix_length,
+	source_paths,
+):
 	source_path = source_paths[1]
-	if len(sys.argv) > 1:
-		source_path = sys.argv[1]
+	if len(argv) > 1:
+		source_path = argv[1]
 	output_dir = dirs["image"]
 	temp_dir = dirs["temp"]
 	if (
@@ -116,3 +118,15 @@ if __name__ == "__main__":
 	if os.path.exists(temp_dir):
 		shutil.rmtree(temp_dir)
 	os.makedirs(temp_dir, exist_ok=True)
+
+
+if __name__ == "__main__":
+	prepare(
+		config.ARCHIVE_EXTENSIONS,
+		sys.argv,
+		config.DIRS,
+		config.IMAGE_EXTENSIONS,
+		config.OUTPUT_FILENAME_LENGTH,
+		config.PREFIX_LENGTH,
+		config.SOURCE_PATHS,
+	)

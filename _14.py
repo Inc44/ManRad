@@ -243,18 +243,19 @@ def process_scroll_segment(
 	return final_focus_point
 
 
-if __name__ == "__main__":
-	audio_filename = config.AUDIO
-	delay_duration = config.DELAY_DURATION
-	delay_percent = config.DELAY_PERCENT
-	dirs = config.DIRS
-	media_filename = config.MEDIA
-	merged_durations_filename = config.MERGED_DURATIONS_FILENAME
-	scroll_video_filename = config.SCROLL_VIDEO
-	target_fps = config.TARGET_FPS
-	target_height = config.TARGET_HEIGHT
-	target_width = config.TARGET_WIDTH
-	transition_gaps_filename = config.TRANSITION_GAPS_FILENAME
+def scroll(
+	audio_filename,
+	delay_percent,
+	dirs,
+	hold_duration,
+	media_filename,
+	merged_durations_filename,
+	scroll_video_filename,
+	target_fps,
+	target_height,
+	target_width,
+	transition_gaps_filename,
+):
 	source_image_directory = dirs["image_resized_fit"]
 	render_dir = dirs["render"]
 	merge_dir = dirs["merge"]
@@ -281,11 +282,11 @@ if __name__ == "__main__":
 	)
 	total_frames_written_count = 0
 	current_focus_point = 0.0
-	num_intro_frames = round(delay_duration * target_fps)
+	num_intro_frames = round(hold_duration * target_fps)
 	if num_intro_frames > 0:
 		_ = process_scroll_segment(
 			delay_percent=delay_percent,
-			duration=delay_duration,
+			duration=hold_duration,
 			frames_metadata=image_metadata,
 			frames_per_second=target_fps,
 			height=target_height,
@@ -332,5 +333,21 @@ if __name__ == "__main__":
 		total_frames_written_count += num_segment_frames
 	if encoder_process.stdin:
 		encoder_process.stdin.close()
-	encoder_exit_code = encoder_process.wait()
+	_ = encoder_process.wait()
 	render_media(audio_filename, media_filename, render_dir, scroll_video_filename)
+
+
+if __name__ == "__main__":
+	scroll(
+		config.AUDIO,
+		config.DELAY_PERCENT,
+		config.DIRS,
+		config.VIDEO_HOLD_DURATION,
+		config.MEDIA,
+		config.MERGED_DURATIONS_FILENAME,
+		config.SCROLL_VIDEO,
+		config.TARGET_FPS,
+		config.TARGET_HEIGHT,
+		config.TARGET_WIDTH,
+		config.TRANSITION_GAPS_FILENAME,
+	)

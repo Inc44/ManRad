@@ -25,14 +25,16 @@ def get_filename(basename, input_dir):
 	return None
 
 
-if __name__ == "__main__":
-	all_images_list_filename = config.ALL_IMAGES_LIST_FILENAME
-	deleted_images_list_filename = config.DELETED_IMAGES_LIST_FILENAME
-	dirs = config.DIRS
-	kept_images_list_filename = config.KEPT_IMAGES_LIST_FILENAME
+def lists(
+	all_images_list_filename,
+	argv,
+	deleted_images_list_filename,
+	dirs,
+	kept_images_list_filename,
+):
 	mode = "delete"
-	if len(sys.argv) > 1:
-		mode = sys.argv[1]
+	if len(argv) > 1:
+		mode = argv[1]
 	merge_dir = dirs["merge"]
 	images_dir = dirs["image"]
 	resized_images_dir = dirs["image_resized"]
@@ -64,3 +66,13 @@ if __name__ == "__main__":
 				path = os.path.join(resized_images_dir, filename)
 				if os.path.exists(path):
 					os.remove(path)
+
+
+if __name__ == "__main__":
+	lists(
+		config.ALL_IMAGES_LIST_FILENAME,
+		sys.argv,
+		config.DELETED_IMAGES_LIST_FILENAME,
+		config.DIRS,
+		config.KEPT_IMAGES_LIST_FILENAME,
+	)

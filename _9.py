@@ -193,8 +193,8 @@ def merge_duration_json(input_dir, merged_durations_filename, output_dir):
 	for filename in files:
 		path = os.path.join(input_dir, filename)
 		with open(path) as f:
-			duration = json.load(f)
-			durations.update(duration)
+			duration_data = json.load(f)
+			durations.update(duration_data)
 	path = os.path.join(output_dir, merged_durations_filename)
 	with open(path, "w") as f:
 		json.dump(durations, f, indent="\t", ensure_ascii=False, sort_keys=True)
@@ -253,22 +253,23 @@ def render_audio(
 	subprocess.run(cmd)
 
 
-if __name__ == "__main__":
-	audio_concat_list_filename = config.AUDIO_CONCAT_LIST_FILENAME
-	audio_delay_duration = config.AUDIO_DELAY_DURATION
-	audio_filename = config.AUDIO
-	audio_output_extension = config.AUDIO_OUTPUT_EXTENSION
-	audio_target_segment_duration = config.AUDIO_TARGET_SEGMENT_DURATION
-	audio_transition_duration = config.AUDIO_TRANSITION_DURATION
-	delay_suffix = config.DELAY_SUFFIX
-	dirs = config.DIRS
-	merged_durations_filename = config.MERGED_DURATIONS_FILENAME
-	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
-	prefix_length = config.PREFIX_LENGTH
-	sample_rate = config.SAMPLE_RATE
-	total_duration_filename = config.TOTAL_DURATION_FILENAME
-	transition_suffix = config.TRANSITION_SUFFIX
-	workers_config = config.WORKERS
+def audio(
+	audio_concat_list_filename,
+	audio_delay_duration,
+	audio_filename,
+	audio_output_extension,
+	audio_target_segment_duration,
+	audio_transition_duration,
+	delay_suffix,
+	dirs,
+	merged_durations_filename,
+	output_image_extension,
+	prefix_length,
+	sample_rate,
+	total_duration_filename,
+	transition_suffix,
+	workers_config,
+):
 	initial_audios = sorted(
 		[
 			f.replace(output_image_extension, audio_output_extension)
@@ -351,4 +352,24 @@ if __name__ == "__main__":
 		dirs["merge"],
 		dirs["render"],
 		sample_rate,
+	)
+
+
+if __name__ == "__main__":
+	audio(
+		config.AUDIO_CONCAT_LIST_FILENAME,
+		config.AUDIO_DELAY_DURATION,
+		config.AUDIO,
+		config.AUDIO_OUTPUT_EXTENSION,
+		config.AUDIO_TARGET_SEGMENT_DURATION,
+		config.AUDIO_TRANSITION_DURATION,
+		config.DELAY_SUFFIX,
+		config.DIRS,
+		config.MERGED_DURATIONS_FILENAME,
+		config.OUTPUT_IMAGE_EXTENSION,
+		config.PREFIX_LENGTH,
+		config.SAMPLE_RATE,
+		config.TOTAL_DURATION_FILENAME,
+		config.TRANSITION_SUFFIX,
+		config.WORKERS,
 	)

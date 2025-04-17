@@ -56,10 +56,10 @@ def text_to_audio(
 	with open(reference_text_path, encoding="utf-8") as f:
 		reference_text = f.read().strip()
 	with open(reference_audio_path, "rb") as f:
-		reference_audio = base64.b64encode(f.read()).decode()
+		reference_audio_base64 = base64.b64encode(f.read()).decode()
 	references = []
-	if reference_text and reference_audio:
-		references.append({"audio": reference_audio, "text": reference_text})
+	if reference_text and reference_audio_base64:
+		references.append({"audio": reference_audio_base64, "text": reference_text})
 	headers = {"Content-Type": "application/json"}
 	payload = {
 		"chunk_length": max_tokens * 2,
@@ -122,18 +122,19 @@ def batch_text_to_audio(
 		)
 
 
-if __name__ == "__main__":
-	api_endpoints = config.API_ENDPOINTS
-	audio_min_size = config.AUDIO_MIN_SIZE
-	audio_output_extension = config.AUDIO_OUTPUT_EXTENSION
-	dirs = config.DIRS
-	fish_temperature = config.FISH_TEMPERATURE
-	max_tokens = config.MAX_TOKENS
-	pause = config.PAUSE
-	reference_audio = config.REFERENCE_AUDIO
-	reference_text = config.REFERENCE_TEXT
-	retries = config.RETRIES
-	workers_config = config.WORKERS
+def fish_tts(
+	api_endpoints,
+	audio_min_size,
+	audio_output_extension,
+	dirs,
+	fish_temperature,
+	max_tokens,
+	pause,
+	reference_audio,
+	reference_text,
+	retries,
+	workers_config,
+):
 	texts = sorted(
 		[f for f in os.listdir(dirs["image_text"]) if f.lower().endswith(".json")]
 	)
@@ -159,3 +160,19 @@ if __name__ == "__main__":
 			for batch in batches
 		]
 		pool.starmap_async(batch_text_to_audio, args).get()
+
+
+if __name__ == "__main__":
+	fish_tts(
+		config.API_ENDPOINTS,
+		config.AUDIO_MIN_SIZE,
+		config.AUDIO_OUTPUT_EXTENSION,
+		config.DIRS,
+		config.FISH_TEMPERATURE,
+		config.MAX_TOKENS,
+		config.PAUSE,
+		config.REFERENCE_AUDIO,
+		config.REFERENCE_TEXT,
+		config.RETRIES,
+		config.WORKERS,
+	)

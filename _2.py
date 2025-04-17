@@ -40,12 +40,9 @@ def batch_resize_images(
 		)
 
 
-if __name__ == "__main__":
-	dirs = config.DIRS
-	image_extensions = config.IMAGE_EXTENSIONS
-	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
-	target_width = config.TARGET_WIDTH
-	workers_config = config.WORKERS
+def resize_to_width(
+	dirs, image_extensions, output_image_extension, target_width, workers_config
+):
 	images = sorted(
 		[
 			f
@@ -67,3 +64,13 @@ if __name__ == "__main__":
 			for batch in batches
 		]
 		pool.starmap_async(batch_resize_images, args).get()
+
+
+if __name__ == "__main__":
+	resize_to_width(
+		config.DIRS,
+		config.IMAGE_EXTENSIONS,
+		config.OUTPUT_IMAGE_EXTENSION,
+		config.TARGET_WIDTH,
+		config.WORKERS,
+	)

@@ -30,17 +30,18 @@ def calculate_openai_tokens(low_resolution, path):
 	return tiles_x * tiles_y * 170 + 85
 
 
-if __name__ == "__main__":
-	cost_deepinfra = config.COST_DEEPINFRA
-	cost_filename = config.COST_FILENAME
-	cost_gemini = config.COST_GEMINI
-	cost_groq = config.COST_GROQ
-	cost_openai = config.COST_OPENAI
-	cost_tts = config.COST_TTS
-	dirs = config.DIRS
-	encoding_name = config.ENCODING_NAME
-	max_tokens = config.MAX_TOKENS
-	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
+def costs(
+	cost_deepinfra,
+	cost_filename,
+	cost_gemini,
+	cost_groq,
+	cost_openai,
+	cost_tts,
+	dirs,
+	encoding_name,
+	max_tokens,
+	output_image_extension,
+):
 	images = sorted(
 		[
 			f
@@ -135,3 +136,18 @@ if __name__ == "__main__":
 	output_path = os.path.join(dirs["merge"], cost_filename)
 	with open(output_path, "w", encoding="utf-8") as f:
 		json.dump(cost_data, f, indent="\t", ensure_ascii=False, sort_keys=False)
+
+
+if __name__ == "__main__":
+	costs(
+		config.COST_DEEPINFRA,
+		config.COST_FILENAME,
+		config.COST_GEMINI,
+		config.COST_GROQ,
+		config.COST_OPENAI,
+		config.COST_TTS,
+		config.DIRS,
+		config.ENCODING_NAME,
+		config.MAX_TOKENS,
+		config.OUTPUT_IMAGE_EXTENSION,
+	)

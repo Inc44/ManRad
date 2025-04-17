@@ -62,7 +62,7 @@ def image_to_text(
 	if is_valid_json(min_size, text_path):
 		return
 	with open(path, "rb") as f:
-		image = base64.b64encode(f.read()).decode()
+		image_base64 = base64.b64encode(f.read()).decode()
 	headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 	payload = {
 		"max_tokens": max_tokens,
@@ -74,7 +74,7 @@ def image_to_text(
 					{"type": "text", "text": prompt},
 					{
 						"type": "image_url",
-						"image_url": {"url": f"data:image/jpeg;base64,{image}"},
+						"image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
 					},
 				],
 			}
@@ -151,20 +151,21 @@ def batch_image_to_text(
 		)
 
 
-if __name__ == "__main__":
-	api_endpoints = config.API_ENDPOINTS
-	api_keys = config.API_KEYS
-	concurrent_requests = config.CONCURRENT_REQUESTS
-	dirs = config.DIRS
-	max_tokens = config.MAX_TOKENS
-	model = config.MODEL
-	output_image_extension = config.OUTPUT_IMAGE_EXTENSION
-	pause = config.PAUSE
-	prompt = config.PROMPT
-	retries = config.RETRIES
-	temperature = config.TEMPERATURE
-	temperature_step = config.TEMPERATURE_STEP
-	text_min_size = config.TEXT_MIN_SIZE
+def texts(
+	api_endpoints,
+	api_keys,
+	concurrent_requests,
+	dirs,
+	max_tokens,
+	model,
+	output_image_extension,
+	pause,
+	prompt,
+	retries,
+	temperature,
+	temperature_step,
+	text_min_size,
+):
 	images = sorted(
 		[
 			f
@@ -195,3 +196,21 @@ if __name__ == "__main__":
 			for batch in batches
 		]
 		pool.starmap_async(batch_image_to_text, args).get()
+
+
+if __name__ == "__main__":
+	texts(
+		config.API_ENDPOINTS,
+		config.API_KEYS,
+		config.CONCURRENT_REQUESTS,
+		config.DIRS,
+		config.MAX_TOKENS,
+		config.MODEL,
+		config.OUTPUT_IMAGE_EXTENSION,
+		config.PAUSE,
+		config.PROMPT,
+		config.RETRIES,
+		config.TEMPERATURE,
+		config.TEMPERATURE_STEP,
+		config.TEXT_MIN_SIZE,
+	)
