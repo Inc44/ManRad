@@ -42,10 +42,16 @@ sudo apt install ffmpeg neofetch unzip vim -y
 ```
 
 ```bash
+conda install paddlepaddle-gpu==3.0.0b1 paddlepaddle-cuda=12.3 -c paddle -c nvidia -y
+pip install opencv-python paddleocr regex tiktoken
+```
+
+```bash
 unzip ManRadE.zip
 unzip ManRadP.zip
 unzip ManRadS.zip
 unzip ManRadS2.zip
+unzip ManRadS3.zip
 ```
 
 ```bash
@@ -66,6 +72,10 @@ neofetch
 
 ```bash
 time prlimit --nofile=4096 python -OO Scroll.py
+```
+
+```bash
+time prlimit --nofile=4096 python -OO menu.py 15
 ```
 
 ```bash

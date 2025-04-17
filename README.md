@@ -78,7 +78,7 @@ huggingface-cli download fishaudio/fish-speech-1.5 --local-dir checkpoints/fish-
 ```
 conda activate fish-speech
 cd fish-speech
-python -O tools/api_server --listen 0.0.0.0:8080 --compile
+python -O tools/api_server.py --listen 0.0.0.0:8080 --compile
 ```
 
 ## Manga Source

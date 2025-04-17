@@ -2022,7 +2022,7 @@ def scroll(
 	target_width,
 	transition_gaps_filename,
 ):
-	source_image_directory = dirs["image_resized_fit"]
+	source_image_directory = dirs["image_resized"]
 	render_dir = dirs["render"]
 	merge_dir = dirs["merge"]
 	output_video_path = os.path.join(render_dir, scroll_video_filename)
