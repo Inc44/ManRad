@@ -3,6 +3,7 @@ import base64
 import bisect
 import cv2
 import functools
+import imageio.v3 as iio
 import json
 import math
 import numpy as np
@@ -770,8 +771,8 @@ def texts(
 		pool.starmap_async(batch_image_to_text, args).get()
 
 
-def calculate_gemini_tokens(path):
-	image = cv2.imread(path)
+def calculate_gemini_tokens(output_image_extension, path):
+	image = iio.improps(path, extension=output_image_extension)
 	height, width = image.shape[:2]
 	if width <= 384 and height <= 384:
 		return 258
@@ -781,10 +782,10 @@ def calculate_gemini_tokens(path):
 	return tiles_x * tiles_y * 258
 
 
-def calculate_openai_tokens(low_resolution, path):
+def calculate_openai_tokens(low_resolution, output_image_extension, path):
 	if low_resolution:
 		return 85
-	image = cv2.imread(path)
+	image = iio.improps(path, extension=output_image_extension)
 	height, width = image.shape[:2]
 	tile_size = 512
 	tiles_x = -(-width // tile_size)
@@ -822,9 +823,13 @@ def costs(
 	for image in images:
 		image_path = os.path.join(dirs["image_crops"], image)
 		token_count_deepinfra += 160
-		token_count_gemini += calculate_gemini_tokens(image_path)
+		token_count_gemini += calculate_gemini_tokens(
+			output_image_extension, image_path
+		)
 		token_count_groq += 6400
-		token_count_openai += calculate_openai_tokens(False, image_path)
+		token_count_openai += calculate_openai_tokens(
+			False, output_image_extension, image_path
+		)
 	extracted_text = ""
 	for text_file in texts:
 		text_path = os.path.join(dirs["image_text"], text_file)
@@ -1831,16 +1836,15 @@ def frames_list(input_dir, output_image_extension):
 	total_height = 0
 	for filename in images:
 		path = os.path.join(input_dir, filename)
-		if os.path.exists(path):
-			image = cv2.imread(path)
-			height = image.shape[0]
-			frame_info = {
-				"path": path,
-				"height": height,
-				"vertical_start_position": total_height,
-			}
-			frames_metadata.append(frame_info)
-			total_height += height
+		image = iio.improps(path, extension=output_image_extension)
+		height = image.shape[0]
+		frame_info = {
+			"path": path,
+			"height": height,
+			"vertical_start_position": total_height,
+		}
+		frames_metadata.append(frame_info)
+		total_height += height
 	return frames_metadata, total_height
 
 

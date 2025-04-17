@@ -1,0 +1,4 @@
+opencv-python
+paddleocr
+regex
+tiktoken
