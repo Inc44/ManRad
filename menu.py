@@ -217,6 +217,7 @@ def action_15():
 		config.VIDEO_HOLD_DURATION,
 		config.MEDIA,
 		config.MERGED_DURATIONS_FILENAME,
+		config.OUTPUT_IMAGE_EXTENSION,
 		config.SCROLL_VIDEO,
 		config.TARGET_FPS,
 		config.TARGET_HEIGHT,

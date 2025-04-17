@@ -142,7 +142,7 @@ def resize_image(filename, input_dir, output_dir, output_image_extension, target
 	height, width = image.shape[:2]
 	basename = os.path.splitext(filename)[0]
 	output_path = os.path.join(output_dir, f"{basename}{output_image_extension}")
-	if width == target_width and filename.lower().endswith((".jpg", ".jpeg")):
+	if width == target_width and filename.lower().endswith(output_image_extension):
 		shutil.copy(path, output_path)
 		return
 	if width != target_width:
@@ -1538,7 +1538,7 @@ def resize_fit_image(
 	height, width = image.shape[:2]
 	basename = os.path.splitext(filename)[0]
 	output_path = os.path.join(output_dir, f"{basename}{output_image_extension}")
-	if height == target_height and filename.lower().endswith((".jpg", ".jpeg")):
+	if height == target_height and filename.lower().endswith(output_image_extension):
 		shutil.copy(path, output_path)
 		return
 	if height > target_height:
@@ -1820,8 +1820,10 @@ def render_scroll_video(height, output_path, target_fps, width):
 	return subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
 
-def frames_list(input_dir):
-	images = sorted([f for f in os.listdir(input_dir) if f.lower().endswith(".jpg")])
+def frames_list(input_dir, output_image_extension):
+	images = sorted(
+		[f for f in os.listdir(input_dir) if f.lower().endswith(output_image_extension)]
+	)
 	frames_metadata = []
 	total_height = 0
 	for filename in images:
@@ -2006,6 +2008,7 @@ def scroll(
 	hold_duration,
 	media_filename,
 	merged_durations_filename,
+	output_image_extension,
 	scroll_video_filename,
 	target_fps,
 	target_height,
@@ -2018,7 +2021,9 @@ def scroll(
 	output_video_path = os.path.join(render_dir, scroll_video_filename)
 	vertical_change_data_path = os.path.join(merge_dir, transition_gaps_filename)
 	segment_duration_data_path = os.path.join(merge_dir, merged_durations_filename)
-	image_metadata, total_content_height = frames_list(source_image_directory)
+	image_metadata, total_content_height = frames_list(
+		source_image_directory, output_image_extension
+	)
 	vertical_start_positions = [
 		meta["vertical_start_position"] for meta in image_metadata
 	]
