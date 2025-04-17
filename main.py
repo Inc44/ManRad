@@ -139,8 +139,6 @@ def prepare(
 def resize_image(filename, input_dir, output_dir, output_image_extension, target_width):
 	path = os.path.join(input_dir, filename)
 	image = cv2.imread(path)
-	if image is None:
-		return
 	height, width = image.shape[:2]
 	basename = os.path.splitext(filename)[0]
 	output_path = os.path.join(output_dir, f"{basename}{output_image_extension}")
@@ -784,8 +782,6 @@ def calculate_openai_tokens(low_resolution, path):
 	if low_resolution:
 		return 85
 	image = cv2.imread(path)
-	if image is None:
-		return 85
 	height, width = image.shape[:2]
 	tile_size = 512
 	tiles_x = -(-width // tile_size)
@@ -1539,8 +1535,6 @@ def resize_fit_image(
 ):
 	path = os.path.join(input_dir, filename)
 	image = cv2.imread(path)
-	if image is None:
-		return
 	height, width = image.shape[:2]
 	basename = os.path.splitext(filename)[0]
 	output_path = os.path.join(output_dir, f"{basename}{output_image_extension}")
@@ -1888,8 +1882,6 @@ def compose_scroll_frame(
 			paste_start_y = max(0, frame_v_start - safe_viewport_top_position)
 			if crop_end_y > crop_start_y:
 				image = cached_image(frame_meta["path"])
-				if image is None:
-					continue
 				image_width = image.shape[1]
 				if image_width != width:
 					if image_width > width:
