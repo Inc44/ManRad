@@ -66,7 +66,7 @@ PROMPT = f'Proofread this text in {LANGUAGE} but only fix grammar without any in
 RETRIES = 3
 TEMPERATURE = 0.0
 TEMPERATURE_STEP = 0.2
-CONCURRENT_REQUESTS = 150
+CONCURRENT_REQUESTS = 60
 API_ENDPOINTS = [
 	"http://localhost:8080/v1/tts",  # Fish
 	"http://localhost:8880/v1/audio/speech",  # Kokoro

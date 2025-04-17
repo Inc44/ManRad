@@ -1,21 +1,22 @@
+from main import (
+	initialize,
+	prepare,
+	resize_to_width,
+	lists,
+	crops,
+	texts,
+	costs,
+	fish_tts,
+	openai_tts,
+	audio,
+	resize_to_fit,
+	page_durations,
+	fade,
+	map_durations,
+	scroll,
+)
 import argparse
 import config
-import sys
-from _0 import initialize
-from _1 import prepare
-from _2 import resize_to_width
-from _3 import lists
-from _4 import crops
-from _5 import texts
-from _6 import costs
-from _7 import fish_tts
-from _8 import openai_tts
-from _9 import audio
-from _10 import resize_to_fit
-from _11 import page_durations
-from _12 import fade
-from _13 import map_durations
-from _14 import scroll
 
 
 def action_1():
