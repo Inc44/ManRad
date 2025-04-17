@@ -1554,7 +1554,7 @@ def resize_fit_image(
 	cv2.imwrite(output_path, image, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
 
-def batch_resize_images(
+def batch_resize_images_to_fit(
 	batch, input_dir, output_dir, output_image_extension, target_height
 ):
 	for filename in batch:
@@ -1582,7 +1582,7 @@ def resize_to_fit(dirs, output_image_extension, target_height, workers_config):
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_resize_images, args).get()
+		pool.starmap_async(batch_resize_images_to_fit, args).get()
 
 
 def page_durations(
