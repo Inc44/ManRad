@@ -920,7 +920,7 @@ def is_valid_audio(min_size, path):
 	return os.path.exists(path) and os.stat(path).st_size >= min_size
 
 
-def text_to_audio(
+def fish_text_to_audio(
 	api_endpoint,
 	attempt,
 	audio_output_extension,
@@ -980,7 +980,7 @@ def text_to_audio(
 			time.sleep(sleep_time)
 
 
-def batch_text_to_audio(
+def batch_fish_text_to_audio(
 	api_endpoint,
 	attempt,
 	audio_output_extension,
@@ -996,7 +996,7 @@ def batch_text_to_audio(
 	temperature,
 ):
 	for filename in batch:
-		text_to_audio(
+		fish_text_to_audio(
 			api_endpoint,
 			attempt,
 			audio_output_extension,
@@ -1050,10 +1050,10 @@ def fish_tts(
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_text_to_audio, args).get()
+		pool.starmap_async(batch_fish_text_to_audio, args).get()
 
 
-def text_to_audio(
+def openai_text_to_audio(
 	api_endpoint,
 	api_key,
 	attempt,
@@ -1103,7 +1103,7 @@ def text_to_audio(
 			time.sleep(sleep_time)
 
 
-def batch_text_to_audio(
+def batch_openai_text_to_audio(
 	api_endpoint,
 	api_key,
 	attempt,
@@ -1121,7 +1121,7 @@ def batch_text_to_audio(
 	voice,
 ):
 	for filename in batch:
-		text_to_audio(
+		openai_text_to_audio(
 			api_endpoint,
 			api_key,
 			attempt,
@@ -1181,7 +1181,7 @@ def openai_tts(
 			)
 			for batch in batches
 		]
-		pool.starmap_async(batch_text_to_audio, args).get()
+		pool.starmap_async(batch_openai_text_to_audio, args).get()
 
 
 def create_silence(duration, output_path, sample_rate):
