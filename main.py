@@ -428,6 +428,7 @@ def save_gaps_json(basename, crop_suffix_length, gaps, output_dir):
 
 
 def init_ocr_engine():
+	global LAZY_PADDLEOCR
 	if LAZY_PADDLEOCR:
 		from paddleocr import PaddleOCR
 
@@ -459,6 +460,7 @@ def detect_image(
 	output_dir_group,
 	output_image_extension,
 ):
+	global LAZY_PADDLEOCR
 	if LAZY_DRAW_OCR:
 		from paddleocr import draw_ocr
 
