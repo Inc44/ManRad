@@ -57,7 +57,6 @@ python -OO _14.py
 
 - Autodetect target height and width using the most common dimensions of images.
 - Camera movement.
-- Create a CLI menu using argparse to select actions with numbers 1 to 15 for individual actions and 0 for auto mode, with a note that it is recommended to define deleted_images.json in advance.
 - Create silent audio proportional to the possible duration of missing audio, calculated using the image text length.
 - Define the index of selected entries in lists.
 - Make the transition duration work for scrolling.
