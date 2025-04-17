@@ -460,7 +460,7 @@ def detect_image(
 	output_dir_group,
 	output_image_extension,
 ):
-	global LAZY_PADDLEOCR
+	global LAZY_DRAW_OCR
 	if LAZY_DRAW_OCR:
 		from paddleocr import draw_ocr
 
