@@ -49,7 +49,7 @@ def action_3():
 
 
 def action_4(program_arguments):
-	mode = program_arguments.mode if program_arguments.mode else "delete"
+	mode = program_arguments.mode if program_arguments.mode else "save"
 	simulated_argv = [None, mode]
 	lists(
 		config.ALL_IMAGES_LIST_FILENAME,
@@ -251,7 +251,7 @@ def start_processing(program_arguments):
 	executor = ACTION_EXECUTORS[selected_action]
 	if selected_action in ARGUMENT_REQUIRED_ACTIONS:
 		if selected_action == 4 and program_arguments.mode is None:
-			program_arguments.mode = "delete"
+			program_arguments.mode = "save"
 		executor(program_arguments)
 	else:
 		executor()
@@ -285,7 +285,7 @@ if __name__ == "__main__":
 		"--mode",
 		type=str,
 		choices=["save", "delete"],
-		default="delete",
+		default="save",
 		help="Operation mode ('save' or 'delete'). Used only by action 4. Defaults to 'delete'.",
 		metavar="MODE",
 	)

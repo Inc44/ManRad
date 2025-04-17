@@ -224,7 +224,7 @@ def lists(
 	dirs,
 	kept_images_list_filename,
 ):
-	mode = "delete"
+	mode = "save"
 	if len(argv) > 1:
 		mode = argv[1]
 	merge_dir = dirs["merge"]
