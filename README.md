@@ -55,6 +55,12 @@ python -OO menu.py ACTION --source PATH --mode save/delete
 docker run -it --name fish-speech --gpus all -p 8080:8080 fishaudio/fish-speech:v1.5.0 zsh
 ```
 
+##### Usage
+
+```
+python -m tools.api_server --listen 0.0.0.0:8080 --compile
+```
+
 #### Conda
 ```
 conda create -n fish-speech python=3.10 -y
@@ -67,10 +73,12 @@ pip install https://github.com/AnyaCoder/fish-speech/releases/download/v0.1.0/tr
 huggingface-cli download fishaudio/fish-speech-1.5 --local-dir checkpoints/fish-speech-1.5
 ```
 
-### Usage
+##### Usage
 
 ```
-python -m tools.api_server --listen 0.0.0.0:8080 --compile
+conda activate fish-speech
+cd fish-speech
+python -O tools/api_server --listen 0.0.0.0:8080 --compile
 ```
 
 ## Manga Source
